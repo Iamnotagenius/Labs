@@ -3,16 +3,17 @@
 #include <string.h>
 #include <ctype.h>
 
-const char USAGE_MESSAGE[] = "Usage: %s [-l, --lines | -c, --bytes | -w, --words] FILE\n";
+const char USAGE_MESSAGE[] = "Usage: %s [-l, --lines | -L, --not-empty-lines | -c, --bytes | -w, --words] FILE\n";
 
-const char *OPTIONS[3][2] = {
+const char *OPTIONS[4][2] = {
 	{"-l", "--lines"},
+	{"-L", "--not-empty-lines"},
 	{"-c", "--bytes"},
 	{"-w", "--words"}
 };
 
 int select_option(char *arg) {
-	for (int option = 0; option < 3; option++)
+	for (int option = 0; option < 4; option++)
 		if (strcmp(OPTIONS[option][0], arg) == 0 or 
 						strcmp(OPTIONS[option][1], arg) == 0)
 			return option;
@@ -28,6 +29,19 @@ int count_lines(FILE *file) {
 	return lines;
 }
 
+int count_not_empty_lines(FILE *file) {
+	int c, lines = 1, prev;
+	c = fgetc(file);
+	if (c == EOF)
+		return 0;
+	while ((c = fgetc(file)) != EOF) {
+		if (prev == '\n' and c != '\n')
+			lines++;
+		prev = c;
+	}
+	return lines;
+}
+
 int count_bytes(FILE *file) {
 	int c, bytes = 0;
 	while ((c = fgetc(file)) != EOF) {
@@ -39,9 +53,9 @@ int count_bytes(FILE *file) {
 int count_words(FILE *file) {
 		int c, words = 0, is_word = 0;
 		while ((c = fgetc(file)) != EOF) {
-			if (is_word and !isalnum(c))
+			if (is_word and !isgraph(c))
 				is_word = 0;
-			else if (!is_word and isalnum(c)) {
+			else if (!is_word and isgraph(c)) {
 				is_word = 1;
 				words++;
 			}
@@ -68,8 +82,9 @@ int main(int argc, char** argv) {
 	if (argv[1][0] == '-') {
 		switch(select_option(argv[1])) {
 			case 0: result = count_lines(file); break;
-			case 1: result = count_bytes(file); break;
-			case 2: result = count_words(file); break;
+			case 1: result = count_not_empty_lines(file); break;
+			case 2: result = count_bytes(file); break;
+			case 3: result = count_words(file); break;
 			default:
 				fprintf(stderr, "%s: invalid option '%s'\n", argv[0], argv[1]);
 				fprintf(stderr, USAGE_MESSAGE, argv[0]);

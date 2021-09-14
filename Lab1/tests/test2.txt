@@ -1,0 +1,1 @@
+Technically, it is a one liner, but with no \n in the end
