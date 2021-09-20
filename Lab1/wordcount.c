@@ -71,6 +71,12 @@ int main(int argc, char** argv) {
 		fprintf(stderr, USAGE_MESSAGE, argv[0]);
 		return 1;
 	}
+	
+	if (argc > 3) {
+		fprintf(stderr, "Too many arguments: %d\n", argc - 1);
+		fprintf(stderr, USAGE_MESSAGE, argv[0]);
+		return 1;
+	}
 
 	file = fopen(argv[argc - 1], "r");
 
@@ -94,6 +100,7 @@ int main(int argc, char** argv) {
 	else {
 		result = count_words(file);
 	}
+	fclose(file);
 	printf("%d\n", result);
 	return 0;
 }
