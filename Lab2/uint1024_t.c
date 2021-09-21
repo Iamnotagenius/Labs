@@ -5,8 +5,7 @@
 #include "uint1024_t.h"
 
 uint1024_t *init() {
-	uint1024_t *new = calloc(sizeof(uint1024_t), sizeof(uint8_t));
-	return new;
+	return calloc(sizeof(uint1024_t), sizeof(uint8_t));
 }
 
 uint1024_t *copy(uint1024_t *x) {
@@ -19,10 +18,6 @@ uint1024_t *copy(uint1024_t *x) {
 void *copyto(uint1024_t *src, uint1024_t *dest) {
 	for (int i = 0; i < UINT1024_SIZE; i++)
 		dest->digit[i] = src->digit[i];
-}
-
-void destroy(uint1024_t *x) {
-	free(x);
 }
 
 int count_significant_digits(const uint1024_t *x) {
@@ -108,21 +103,6 @@ uint1024_t *substract(uint1024_t *x, uint1024_t *y) {
 	return result;
 }
 
-uint1024_t *mult(uint1024_t *x, uint1024_t *y) {
-	uint1024_t *result = init();
-	for (uint1024_t *i = uint1024_from_uint(0); compare(i, y) < 0; inc(i))
-		ladd(result, x);
-	return result;
-}
-
-void lmult(uint1024_t *x, uint1024_t *y) {
-	uint1024_t *cache = copy(x);
-	for (uint1024_t *i = uint1024_from_uint(1); compare(i, y) < 0; inc(i)) {
-		ladd(x, cache);
-	}
-	destroy(cache);
-}
-
 void lsubstract(uint1024_t *x, uint1024_t *y) {
 	int initial_digit;
 	bool underflow = false;
@@ -133,18 +113,6 @@ void lsubstract(uint1024_t *x, uint1024_t *y) {
 	}
 }
 
-uint1024_div *divmod(uint1024_t *dividend, uint1024_t *divisor) {
-	uint1024_div *result = malloc(sizeof(uint1024_div));
-	result->quot = init();
-	uint1024_t *temp = copy(dividend);
-	while (compare(temp, divisor) >= 0) {
-		inc(result->quot);
-		lsubstract(temp, divisor);
-	}
-	result->rem = temp;
-	return result;
-}
-
 void dec(uint1024_t *x) {
 	int initial_digit;
 	bool underflow = true;
@@ -152,6 +120,67 @@ void dec(uint1024_t *x) {
 		initial_digit = x->digit[i];
 		x->digit[i] -= underflow;
 		underflow = initial_digit < x->digit[i]; 
+	}
+}
+
+uint1024_t *mult(uint1024_t *x, uint1024_t *y) {
+	uint1024_t *result = init();
+	for (uint1024_t *i = uint1024_from_uint(0); compare(i, y) < 0; inc(i))
+		ladd(result, x);
+	return result;
+}
+
+void lmult(uint1024_t *x, uint1024_t *y) {
+	uint1024_t *temp = copy(x);
+	for (uint1024_t *i = uint1024_from_uint(1); compare(i, y) < 0; inc(i)) {
+		ladd(x, temp);
+	}
+	free(temp);
+}
+
+uint1024_div divmod(uint1024_t *dividend, uint1024_t *divisor) {
+	uint1024_div result;
+	result.quot = init();
+	uint1024_t *temp = copy(dividend);
+	while (compare(temp, divisor) >= 0) {
+		inc(result.quot);
+		lsubstract(temp, divisor);
+	}
+	result.rem = temp;
+	return result;
+}
+
+uint1024_t *ldivmod(uint1024_t *dividend, uint1024_t *divisor) {
+	uint1024_div res = divmod(dividend, divisor);
+	free(dividend);
+	dividend = res.quot;
+	return res.rem;
+}
+
+uint1024_t *div(uint1024_t *dividend, uint1024_t *divisor) {
+	uint1024_div res = divmod(dividend, divisor);
+	free(res.rem);
+	return res.quot;
+}
+
+void ldiv(uint1024_t *dividend, uint1024_t *divisor) {
+	uint1024_div res = divmod(dividend, divisor);
+	free(dividend);
+	free(res.rem);
+	dividend = res.quot;
+}
+
+uint1024_t *mod(uint1024_t *dividend, uint1024_t *divisor) {
+	uint1024_t *temp = copy(dividend);
+	while (compare(temp, divisor) >= 0) {
+		lsubstract(temp, divisor);
+	}
+	return temp;
+}
+
+void lmod(uint1024_t *dividend, uint1024_t *divisor) {
+	while (compare(dividend, divisor) >= 0) {
+		lsubstract(dividend, divisor);
 	}
 }
 
