@@ -6,3 +6,7 @@ OBJS = ${SRC:.c=.o}
 
 test: ${OBJS}
 	gcc ${OBJS}
+
+debug: ${OBJS}
+	${CC} -g -c ${CFLAGS} ${SRC}
+	gcc -g ${OBJS}

@@ -5,7 +5,7 @@
 #include "uint1024_t.h"
 
 uint1024_t *init() {
-	return calloc(sizeof(uint1024_t), sizeof(uint8_t));
+	return calloc(UINT1024_SIZE, sizeof(uint8_t));
 }
 
 uint1024_t *copy(uint1024_t *x) {
@@ -15,7 +15,7 @@ uint1024_t *copy(uint1024_t *x) {
 	return new;
 }
 
-void *copyto(uint1024_t *src, uint1024_t *dest) {
+void copyto(uint1024_t *src, uint1024_t *dest) {
 	for (int i = 0; i < UINT1024_SIZE; i++)
 		dest->digit[i] = src->digit[i];
 }
@@ -150,24 +150,28 @@ uint1024_div divmod(uint1024_t *dividend, uint1024_t *divisor) {
 	return result;
 }
 
-uint1024_t *ldivmod(uint1024_t *dividend, uint1024_t *divisor) {
-	uint1024_div res = divmod(dividend, divisor);
-	free(dividend);
-	dividend = res.quot;
-	return res.rem;
+void ldivmod(uint1024_t *dividend, uint1024_t *divisor, uint1024_t *mod) {
+	uint1024_t *quot = init();
+	copyto(dividend, mod);
+	while (compare(mod, divisor) >= 0) {
+		inc(quot);
+		lsubstract(mod, divisor);
+	}
+	copyto(quot, dividend);
+	free(quot);
 }
 
-uint1024_t *div(uint1024_t *dividend, uint1024_t *divisor) {
+uint1024_t *divide(uint1024_t *dividend, uint1024_t *divisor) {
 	uint1024_div res = divmod(dividend, divisor);
 	free(res.rem);
 	return res.quot;
 }
 
-void ldiv(uint1024_t *dividend, uint1024_t *divisor) {
+void ldivide(uint1024_t *dividend, uint1024_t *divisor) {
 	uint1024_div res = divmod(dividend, divisor);
-	free(dividend);
+	copyto(res.quot, dividend);
 	free(res.rem);
-	dividend = res.quot;
+	free(res.quot);
 }
 
 uint1024_t *mod(uint1024_t *dividend, uint1024_t *divisor) {
@@ -184,12 +188,36 @@ void lmod(uint1024_t *dividend, uint1024_t *divisor) {
 	}
 }
 
-char *to_str(const uint1024_t *x) {
-	int current_digit, significant_digits;
+char *to_str(uint1024_t *x) {
+	uint1024_t *current = init(), *temp = copy(x);
+	uint1024_t *base = uint1024_from_uint(10);
 	int length = count_significant_digits(x);
-	char *str = malloc(3 * (length + 1));
-	for (int i = 0; i <= length; i++)
-		sprintf(str + 3 * i, "%02X ", x->digit[i]);
-	str[3 * (length + 1) - 1] = '\0';
+	int leading_zeros = 0;
+	char *str = malloc(3 * length + 4);
+	for (int i = 3 * length + 2; i >= 0; i--) {
+		ldivmod(temp, base, current);
+		str[i] = current->digit[0] + '0';
+	}
+	str[3 * length + 3] = '\0';
+	while (str[leading_zeros] == '0')
+		leading_zeros++;
+	for (int i = leading_zeros; str[i]; i++)
+		str[i - leading_zeros] = str[i];
+	str[3 * length + 3 - leading_zeros] = '\0';	
 	return str;
+}
+
+uint1024_t *scan_uint1024(char *str) {
+	int i = 0;
+	char c = str[0];
+	uint1024_t *base = uint1024_from_uint(10), *temp;
+	uint1024_t *result = init();
+	while (c = str[i]) {
+		lmult(result, base);
+		temp = uint1024_from_uint(c - '0');
+		ladd(result, temp);
+		free(temp);
+		i++;
+	}
+	return result;
 }
