@@ -1,8 +1,9 @@
 #include <stdint.h>
-#define UINT1024_SIZE 128
-#define BASE 256
+#define UINT1024_MIN_SIZE 32
+#define BASE 100
 typedef struct {
-	uint8_t digit[UINT1024_SIZE];
+	uint8_t *digit;
+	uint32_t size;
 } uint1024_t;
 
 typedef struct {
