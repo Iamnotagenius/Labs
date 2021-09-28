@@ -38,7 +38,7 @@ void copyto(uint1024_t src, uint1024_t dest) {
 }
 
 uint32_t count_significant_digits(const uint1024_t x) {
-	uint32_t i = x.size - 1;
+	int64_t i = (int64_t)x.size - 1;
 	while (x.digit[i] == 0 and i > 0)
 		i--;
 	return i;
@@ -80,12 +80,11 @@ int compare(uint1024_t x, uint1024_t y) {
 }
 
 uint1024_t add(uint1024_t x, uint1024_t y) {
-	uint1024_t result;
+	uint32_t max_size = x.size > y.size ? x.size : y.size;
+	uint1024_t result = init(max_size);
 	bool overflow = false;
-	uint32_t significant = max_digits(x, y);
- 	result = init(significant);
 	
-	for (uint32_t i = 0; i <= significant; i++) {
+	for (uint32_t i = 0; i < max_size; i++) {
 		result.digit[i] = x.digit[i] + y.digit[i] + overflow;
 		overflow = result.digit[i] >= BASE;
 		if (overflow) 
@@ -94,7 +93,7 @@ uint1024_t add(uint1024_t x, uint1024_t y) {
 	
 	if (overflow) {
 		extent(result, UINT1024_MIN_SIZE);
-		result.digit[significant + 1] = 1;
+		result.digit[max_size + 1] = 1;
 	}
 
 	return result;
@@ -102,9 +101,9 @@ uint1024_t add(uint1024_t x, uint1024_t y) {
 
 void ladd(uint1024_t x, uint1024_t y) {
 	bool overflow = false;
-	uint32_t significant = max_digits(x, y);
+	uint32_t max_size = x.size > y.size ? x.size : y.size;
 
-	for (uint32_t i = 0; i <= significant; ++i) {
+	for (uint32_t i = 0; i < max_size; ++i) {
 		x.digit[i] += y.digit[i] + overflow;
 		overflow = x.digit[i] >= BASE;
 		if (overflow)
@@ -113,15 +112,14 @@ void ladd(uint1024_t x, uint1024_t y) {
 
 	if (overflow) {
 		extent(x, UINT1024_MIN_SIZE);
-		x.digit[significant + 1] = 1;
+		x.digit[max_size + 1] = 1;
 	}
 }
 
 void inc(uint1024_t x) {
 	bool overflow = true;
-	uint32_t significant = count_significant_digits(x);
 	
-	for (uint32_t i = 0; i <= significant; i++) {
+	for (uint32_t i = 0; i < x.size; i++) {
 		x.digit[i] += overflow;
 
 		overflow = x.digit[i] >= BASE; 
@@ -131,7 +129,7 @@ void inc(uint1024_t x) {
 	
 	if (overflow) {
 		extent(x, UINT1024_MIN_SIZE);
-		x.digit[significant + 1] = 1;
+		x.digit[x.size + 1] = 1;
 	}
 }
 
@@ -170,16 +168,31 @@ void dec(uint1024_t x) {
 
 uint1024_t mult(uint1024_t x, uint1024_t y) {
 	uint1024_t result = init(x.size);
-	for (uint1024_t i = uint1024_from_uint(0); compare(i, y) < 0; inc(i))
+
+	bool is_zero = true;
+	for (uint32_t i = 0; i < x.size; ++i) 
+		is_zero = is_zero && !x.digit[i];
+
+	if (is_zero)
+		return init(x.size);
+
+	for (uint1024_t i = init(y.size); compare(i, y) < 0; inc(i))
 		ladd(result, x);
 	return result;
 }
 
 void lmult(uint1024_t x, uint1024_t y) {
 	uint1024_t temp = copy(x);
-	for (uint1024_t i = uint1024_from_uint(1); compare(i, y) < 0; inc(i)) {
+
+	bool zero = false;
+	for (uint32_t i = 0; i < x.size; ++i) 
+		zero = x.digit[i] || zero;
+	if (zero)
+		return;
+
+	for (uint1024_t i = init(y.size); compare(i, y) < 0; inc(i))
 		ladd(x, temp);
-	}
+	
 	free(temp.digit);
 }
 
