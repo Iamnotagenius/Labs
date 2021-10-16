@@ -6,7 +6,7 @@
 
 uint1024_t init(uint32_t size) {
 	uint1024_t result;
-	result.digit = calloc(size, sizeof(uuint32_t8_t));
+	result.digit = calloc(size, sizeof(uint8_t));
 	result.size = size;
 	return result;
 }
@@ -17,7 +17,7 @@ uint1024_t extent(uint1024_t x, uint32_t size) {
 }
 
 uint1024_t copy(uint1024_t x) {
-	uint1024_t new = init();
+	uint1024_t new = init(UINT1024_MIN_SIZE);
 	for (uint32_t i = 0; i < x.size; ++i)
 		new.digit[i] = x.digit[i];
 	return new;
@@ -37,7 +37,7 @@ void copyto(uint1024_t src, uint1024_t dest) {
 	}
 }
 
-uint32_t count_significant_digits(const uint1024_t x) {
+uint32_t last_significant_digit(const uint1024_t x) {
 	uint32_t i = x.size - 1;
 	while (x.digit[i] == 0 and i > 0)
 		i--;
@@ -52,7 +52,7 @@ uint32_t max_digits(uint1024_t x, uint1024_t y) {
 }
 
 uint1024_t uint1024_from_uint(unsigned int x) {
-	uint1024_t value = init();
+	uint1024_t value = init(UINT1024_MIN_SIZE);
 	uint32_t i = 0;
 	while (x) {
 		value.digit[i] = x % BASE;
@@ -119,7 +119,7 @@ void ladd(uint1024_t x, uint1024_t y) {
 
 void inc(uint1024_t x) {
 	bool overflow = true;
-	uint32_t significant = count_significant_digits(x);
+	uint32_t significant = last_significant_digit(x);
 	
 	for (uint32_t i = 0; i <= significant; i++) {
 		x.digit[i] += overflow;
@@ -136,7 +136,7 @@ void inc(uint1024_t x) {
 }
 
 uint1024_t substract(uint1024_t x, uint1024_t y) {
-	uint1024_t result = init();
+	uint1024_t result = init(UINT1024_MIN_SIZE);
 	bool underflow = false;
 	for (uint32_t i = 0; i < x.size; i++) {
 		result.digit[i] = x.digit[i] - y.digit[i] - underflow;
@@ -168,10 +168,27 @@ void dec(uint1024_t x) {
 	}
 }
 
+void times_hundred(uint1024_t x, power) {
+	if (power <= 0)
+		return;
+	
+	uint32_t len_x = last_significant_digit(x);
+	if (x.size < len_x + power)
+		extent(x, x.size + power);
+
+	for (int64_t i = last_significant_digit(x); i >= 0; ++i) {
+		x.digit[i + power] = x.digit[i];
+		x.digit[i] = 0;
+	}
+}
+
 uint1024_t mult(uint1024_t x, uint1024_t y) {
-	uint1024_t result = init();
-	for (uint1024_t i = uint1024_from_uint(0); compare(i, y) < 0; inc(i))
-		ladd(result, x);
+	uint1024_t result = init(UINT1024_MIN_SIZE);
+	
+
+	
+	for (int i = 0
+	
 	return result;
 }
 
@@ -185,7 +202,7 @@ void lmult(uint1024_t x, uint1024_t y) {
 
 uint1024_div divmod(uint1024_t dividend, uint1024_t divisor) {
 	uuint32_t1024_div result;
-	result.quot = init();
+	result.quot = init(UINT1024_MIN_SIZE);
 	uint1024_t temp = copy(dividend);
 	while (compare(temp, divisor) >= 0) {
 		inc(result.quot);
@@ -196,7 +213,7 @@ uint1024_div divmod(uint1024_t dividend, uint1024_t divisor) {
 }
 
 void ldivmod(uint1024_t dividend, uint1024_t divisor, uint1024_t mod) {
-	uint1024_t quot = init();
+	uint1024_t quot = init(UINT1024_MIN_SIZE);
 	copyto(dividend, mod);
 	while (compare(mod, divisor) >= 0) {
 		inc(quot);
@@ -235,7 +252,7 @@ void lmod(uint1024_t dividend, uint1024_t divisor) {
 
 char *to_str(uint1024_t x) {
 	bool first_digit = !(x.digit[0] / 10);
-	uint32_t length = count_significant_digits(x);
+	uint32_t length = last_significant_digit(x);
 	char *str = malloc(2 * length + first_digit);
 	
 	for (uint32_t i = 0; i <= length; i += 2) 
@@ -246,11 +263,11 @@ char *to_str(uint1024_t x) {
 	return str;
 }
 
-uint1024_t *scan_uint1024(char *str) {
+uint1024_t scan_uint1024(char *str) {
 	uint32_t i = 0;
 	char c = str[0];
-	uint1024_t *base = uint1024_from_uint(10), *temp;
-	uint1024_t *result = init();
+	uint1024_t base = uint1024_from_uint(10), *temp;
+	uint1024_t result = init(UINT1024_MIN_SIZE);
 	while (c = str[i]) {
 		lmult(result, base);
 		temp = uuint32_t1024_from_uint(c - '0');
