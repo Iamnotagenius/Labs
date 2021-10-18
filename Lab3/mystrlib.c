@@ -79,3 +79,24 @@ char *read_str_between(FILE *file, char start, char end) {
 	return read_until_char(file, end);
 }
 
+char *get_pos(char *cursor, char c) {
+	while (*cursor != c and *cursor)
+		cursor++;
+
+	if (*cursor == '\0')
+		return NULL;
+}
+
+char *get_substr(char **cursor) {
+	while (isspace(*++*cursor)) {}
+	int len_sub = 0;
+	char *start = *cursor, str;
+	while (isgraph(*++*cursor)) { 
+		len_sub++;
+	}
+	*cursor = start;
+	str = malloc(len_sub * sizeof(char));
+	
+	sscanf("%s", str);
+	return str;
+}

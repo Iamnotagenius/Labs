@@ -35,24 +35,18 @@ tm_t *parse_date(char *str) {
 	return res;
 }
 
-data_t parse_line(FILE *log_file) {
+data_t parse_line(char *log_line) {
 	data_t res;
 	char *buf;
 	
-	res.remote_addr = read_str(log_file);
-	
-	buf = read_str_between(log_file, '[', ']');
-	res.date = parse_date(buf);
-	free(buf);
-
-	buf = read_str_between(log_file, '"', '"');
-	res.request = buf;
-	
-	fscanf(log_file, "%d %d", &res.status, &res.bytes_send);
-	
-	skip_until_char(log_file, '\n');
 	
 	return res;
+}
+
+void free_data(data_t data) {
+	free(data.date);
+	free(data.remote_addr);
+	free(data.request);
 }
 
 void print_data(data_t data) {
@@ -65,9 +59,9 @@ void print_data(data_t data) {
 
 int main(int argc, char** argv) {
 	FILE *f = fopen(argv[1], "r");
-	
-	data_t data = parse_line(f);
-	print_data(data);
 
+	data_t data = parse_line(f);
+	time_t time = mktime(data.date);
+	printf("%s\n", ctime(&time));
 	return 0;
 }
