@@ -4,3 +4,8 @@ char *read_str(FILE *file);
 int skip_until_char(FILE *file, char c);
 char *read_until_char(FILE *file, char end);
 char *read_str_between(FILE *file, char start, char end);
+int set_pos_to(char **cursor, char c);
+char *get_substr(char **cursor);
+char *clone_str_until(char **cursor, char c);
+char *clone_str_between(char **cursor, char start, char end);
+char **split(char *str, int *counter);
