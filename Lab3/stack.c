@@ -14,11 +14,10 @@ typedef struct {
 	void (*free_func)(void *);
 } stack;
 
-stack *create_stack(size_t size, void (*free_func)(void *)) {
+stack *create_stack(size_t size) {
 	stack *new = malloc(sizeof(stack));
 	new->size = size;
 	new->last = NULL;
-	new->free_func = free_func;
 	return new;
 }
 
@@ -27,8 +26,6 @@ void delete_stack(stack *s) {
 		stack_node *tmp = s->last;
 		s->last = s->last->prev;
 
-		if (s->free_func != NULL)
-			s->free_func(tmp->current);
 		free(tmp->current);
 		free(tmp);
 	}
@@ -46,12 +43,11 @@ int pop(stack *s, void *buf) {
 	if (s->last == NULL) 
 		return 0;
 
-	memcpy(buf, s->last->current, s->size);
+	if(buf != NULL)
+		memcpy(buf, s->last->current, s->size);
 	stack_node *tmp = s->last;
 	s->last = s->last->prev;
 
-	if (s->free_func != NULL)
-		s->free_func(tmp->current);
 	free(tmp->current);
 	free(tmp);
 	return 1;

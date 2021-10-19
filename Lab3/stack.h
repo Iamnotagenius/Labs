@@ -12,5 +12,5 @@ typedef struct {
 int pop(stack *s, void *buf);
 void push(stack *s, void *element);
 void delete_stack(stack *s);
-stack *create_stack(size_t size, void (*free_func)(void *));
+stack *create_stack(size_t size);
 

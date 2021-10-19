@@ -51,15 +51,14 @@ int count_bytes(FILE *file) {
 }
 
 int count_words(FILE *file) {
-		int c, words = 0, is_word = 0;
-		while ((c = fgetc(file)) != EOF) {
-			if (is_word and !isgraph(c))
-				is_word = 0;
-			else if (!is_word and isgraph(c)) {
-				is_word = 1;
-				words++;
-			}
-		}
+	int words = 0;
+	fscanf(file, " ");
+
+	while (!feof(file)) {
+		words++;
+		fscanf(file, "%*s ");
+	}
+	
 	return words;
 }
 

@@ -9,3 +9,4 @@ char *get_substr(char **cursor);
 char *clone_str_until(char **cursor, char c);
 char *clone_str_between(char **cursor, char start, char end);
 char **split(char *str, int *counter);
+char *copy_str(char *src);

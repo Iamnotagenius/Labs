@@ -1,12 +1,12 @@
-SRC = mystrlib.c main.c
+SRC = mystrlib.c main.c stack.c queue.c
 OBJS = ${SRC:.c=.o}
 
 .c.o:
 	${CC} -c ${CFLAGS} $<
 
 main: ${OBJS}
-	gcc ${OBJS}
+	${CC} ${OBJS}
 
 debug: ${OBJS}
-	${CC} -g -c ${CFLAGS} ${SRC}
-	gcc -g ${OBJS}
+	${CC} -Wall -g -c ${CFLAGS} ${SRC}
+	${CC} -g ${OBJS}

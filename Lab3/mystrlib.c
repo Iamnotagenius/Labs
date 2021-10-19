@@ -97,63 +97,8 @@ char *read_str_between(FILE *file, char start, char end) {
 	return read_until_char(file, end);
 }
 
-int set_pos_to(char **cursor, char c) {
-	int ch_read;
-	while (**cursor != c and **cursor) {
-		(*cursor)++;
-		ch_read++;
-	}
-	return ch_read;
-}
-
-char *get_substr(char **cursor) {
-	while (isspace(*(++(*cursor)))) {}
-	int len_sub = 0;
-	char *start = (*cursor) - 1, *str;
-	while (isgraph(*(++(*cursor)))) { 
-		len_sub++;
-	}
-	str = malloc((len_sub + 1) * sizeof(char));
-	
-	sscanf(start, "%s", str);
-	return str;
-}
-
-char *clone_str_until(char **cursor, char c) {
-	char *str, *start = *cursor;
-	int len_sub = 0;
-
-	while (*((*cursor)++) != c) {
-		len_sub++;
-	}
-	str = malloc(len_sub + 1);
-	for (int i = 0; i < len_sub; ++i) {
-		str[i] = *start;
-		start++;
-	}
-	str[len_sub] = '\0';
-	return str;
-}
-
-char *clone_str_between(char **cursor, char start, char end) {
-	set_pos_to(cursor, start);
-	(*cursor)++;
-	return clone_str_until(cursor, end);
-}
-
-char **split(char *str, int* counter) {
-	int words_counter = 0;
-	char *cursor = str;
-	while (*cursor) {
-		words_counter++;
-		while (isspace(*(++cursor)) and *cursor) {}
-		while (isgraph(*(++cursor)) and *cursor) {}
-	}
-	char **result = malloc(words_counter * sizeof(char *));
-	cursor = str;
-	for (int i = 0; i < words_counter; ++i) {
-		result[i] = get_substr(&cursor);
-	}
-	*counter = words_counter;
-	return result;
+char *copy_str(char *src) {
+	char *dest = malloc(strlen(src) + 1);
+	strcpy(dest, src);
+	return dest;
 }
