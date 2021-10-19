@@ -3,7 +3,9 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-#include "mystrlib.h"
+#include <iso646.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include "stack.h"
 #include "queue.h"
 
@@ -39,6 +41,124 @@ const char *ERROR_MESSAGES[] = {
 	"Network Authentication Required"
 };
 
+const char USAGE_MESSAGE[] = "Usage: %s log.txt [-t, --time TIME_WINDOW] [-e, --error-file FILE]\n";
+
+typedef const struct {
+	char short_opt;
+	char *long_opt;
+} opt_t;
+const int OPTION_LEN = 2;
+const opt_t OPTIONS[] = {
+	{ 't', "time" },
+	{ 'e', "error-file" },
+};
+
+void assign_option(int opt, char *arg, void *buf[3]) {
+	switch (opt) {
+		case 0:
+			int d = atoi(arg);
+			memcpy(buf[0], &d, sizeof(int));
+			break;
+		case 1:	
+			if (strcmp(arg, "-") == 0) {
+				memcpy(buf[1], &stdout, sizeof(FILE *));
+				break;
+			}
+			FILE *f = fopen(arg, "w");
+			if (f == NULL) {
+				fprintf(stderr, "Could not open file '%s'\n", arg);
+				exit(2);
+			}
+			memcpy(buf[1], &f, sizeof(FILE *));
+			break;
+	}
+}
+
+int handle_short_option(char opt, char *arg, void *buf[3]) {
+	for (int i = 0; i < OPTION_LEN; ++i) {
+		if (opt == OPTIONS[i].short_opt) {
+			assign_option(i, arg, buf);
+			return 0;
+		}
+	}
+	return opt;
+}
+
+int handle_long_option(char *opt, char *arg, void *buf[3]) {
+	for (int i = 0; i < OPTION_LEN; ++i) {
+		if (strcmp(OPTIONS[i].long_opt, opt) == 0) {
+			assign_option(i, arg, buf);
+			return 0;
+		}
+	}
+	return 1;
+}
+
+void invalid_option(char *opt, char *prog) {
+	fprintf(stderr, "Invalid option '%s'\n", opt);
+	fprintf(stderr, USAGE_MESSAGE, prog);
+	exit(1);
+}
+
+void parse_args(int argc, char **argv, ...) {
+	if (argc < 2) {
+		fprintf(stderr, USAGE_MESSAGE, argv[0]);
+		exit(1);
+	}
+	va_list args;
+	va_start(args, argv);
+	void *buf[3] = {
+		va_arg(args, void *),
+		va_arg(args, void *),
+		va_arg(args, void *)
+	};
+	bool reading_args = true;
+	int arg = 1, opt;
+	while (arg != argc) {
+		if (reading_args and argv[arg][0] == '-') {
+			if (argv[arg][1] == '-') {
+				if (strlen(argv[arg]) == 2) {
+					reading_args = false;
+					arg++;
+					continue;
+				}
+				if (handle_long_option(argv[arg] + 2, argv[arg + 1], buf)) {
+					invalid_option(argv[arg], argv[0]);
+				}
+				arg++;
+			}
+			else {
+				if (strlen(argv[arg]) == 1) {
+					invalid_option("-", argv[0]);
+				}
+				
+				if ((opt = handle_short_option(argv[arg][1], argv[arg + 1], buf))) {
+					char *tmp = calloc(2, 1);
+					*tmp = opt;
+					invalid_option(tmp, argv[0]);
+					free(tmp);
+				}
+				arg++;
+			}
+		}
+		else {
+			FILE *log_file = fopen(argv[arg], "r");
+			if (log_file == NULL) {
+				fprintf(stderr, "Could not open file '%s'\n", argv[arg]);
+				exit(2);
+			}
+			memcpy(buf[2], &log_file, sizeof(FILE *));
+		}
+		arg++;
+	}
+}
+
+char *copy_str(char *src) {
+	char *dest = malloc(strlen(src) + 1);
+	strcpy(dest, src);
+	return dest;
+}
+
 time_t parse_date(char *str) {
 	tm_t res;
 	tz_t timezone;
@@ -47,7 +167,8 @@ time_t parse_date(char *str) {
 					&res.tm_mday, month, &res.tm_year,
 				   	&res.tm_hour, &res.tm_min, &res.tm_sec, 
 				   	&timezone.sign, &timezone.hour, &timezone.min);
-
+	
+	/* converting to UTC */
 	switch(timezone.sign) {
 		case '-':
 			res.tm_hour -= timezone.hour;
@@ -65,6 +186,7 @@ time_t parse_date(char *str) {
 			break;
 		}
 	}
+	/* in struct tm years counts since 1900 */
 	res.tm_year -= 1900;
 	res.tm_isdst = -1;
 	time_t time = mktime(&res);
@@ -74,6 +196,7 @@ time_t parse_date(char *str) {
 data_t parse_line(char *log_line) {
 	data_t res;
 
+	/* https://en.cppreference.com/w/c/string/byte/strtok */
 	log_line = strtok(log_line, " ");
 	res.remote_addr = copy_str(log_line);
 
@@ -95,82 +218,68 @@ void free_data(data_t data) {
 	free(data.request);
 }
 
-static inline char *time_to_str(time_t time) {
+/* Using recommended way of converting time_t object to string */
+char *time_to_str(time_t time) {
 	tm_t *buf = localtime(&time);
-
+	
 	char *time_str = malloc(21);
 	strftime(time_str, 21, "%d/%b/%Y:%T", buf);
 	return time_str;
 }
 
-static inline void print_log(data_t data) {
-	char *time_str = time_to_str(data.date);
-	printf("%s - - [%s] \"%s\" %d %d\n", 
-			data.remote_addr, time_str, data.request, data.status, data.bytes_send);
-	free(time_str);
-}
-
 int main(int argc, char** argv) {
-	struct timespec ts1, ts2;
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts1);
-	FILE *f = fopen(argv[1], "r");
-	if (f == NULL) {
-		fprintf(stderr, "Could not open file '%s'\n", argv[1]);
-		return 1;
-	}
-
+	int diff = -1;
+	FILE *error_file = NULL, *log_file;
 	char *buffer = malloc(BUFFER_SIZE);
-	int lines_read = 0, diff = atoi(argv[2]);
 	data_t parsed;
 	stack *failed = create_stack(sizeof(data_t));
 	queue *times = create_queue(sizeof(time_t));
+	parse_args(argc, argv, &diff, &error_file, &log_file);
+	if (diff == -1)
+		diff = 60;
+
 	struct {
 		int amount;
 		time_t start;
 		time_t end;
 	} time_window;
-	while (!feof(f)) {
-		fgets(buffer, BUFFER_SIZE, f);
+
+	while (!feof(log_file)) {
+		fgets(buffer, BUFFER_SIZE, log_file);
 		parsed = parse_line(buffer);
 
-		push_q(times, &parsed.date);
-		if ((int)difftime(*(time_t *)head_q(times), *(time_t *)tail_q(times)) > diff) {
+		if (times->length > 0 and difftime(parsed.date, *(time_t *)tail_q(times)) > diff) {
 			if (times->length > time_window.amount) {
 				time_window.start = *(time_t *)tail_q(times);
-				time_window.end = *(time_t *)times->head->previous->item;
-				time_window.amount = times->length - 1;
+				time_window.end = *(time_t *)head_q(times);
+				time_window.amount = times->length;
 			}
-			while ((int)difftime(*(time_t *)head_q(times), *(time_t *)tail_q(times)) > diff)
+			while (times->length > 0 and difftime(parsed.date, *(time_t *)tail_q(times)) > diff)
 				pop_q(times, NULL);	
 		}
+		push_q(times, &parsed.date);
 
 		if (parsed.status / 100 == 5) {
 			push(failed, &parsed);
 		}
-		lines_read++;
-		fscanf(f, " ");
+		fscanf(log_file, " ");
 	}
 	
 	free(buffer);
 	
-	//puts("=== SERVER ERRORS ===");
+	printf("There were %d server errors.\n", failed->length);
 	while (pop(failed, &parsed)) {
 		char *time_str = time_to_str(parsed.date);
-		//printf("[%s] (%s) Error %d: %s\n", time_str, parsed.remote_addr, parsed.status, ERROR_MESSAGES[parsed.status % 100]);
+		if (error_file != NULL)
+			fprintf(error_file, "[%s] (%s) Error %d: %s\n", time_str, parsed.remote_addr, parsed.status, ERROR_MESSAGES[parsed.status % 100]);
 		free_data(parsed);
 		free(time_str);
 	}
-	
-	printf("Most active time window\nfrom: %sto: ", 
-					ctime(&time_window.start));
-	fputs(ctime(&time_window.end), stdout);
-	printf("(%d requests handled)\n", time_window.amount);
-	
- 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts2);
-	
-	double posix_dur = 1000.0*ts2.tv_sec + 1e-6*ts2.tv_nsec
-                      - (1000.0*ts1.tv_sec + 1e-6*ts1.tv_nsec);
 
-	printf("Time elapsed: %.2f ms\n", posix_dur);
+	printf("Most active time window\nfrom: %s\nto: %s\n(%d requests)\n", 
+					time_to_str(time_window.start),
+					time_to_str(time_window.end),
+					time_window.amount);
+	
 	return 0;
 }

@@ -1,23 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-struct node;
-typedef struct node {
-	void *current;
-	struct node *prev;
-} stack_node;
-
-typedef struct {
-	size_t size;
-	stack_node *last;
-	void (*free_func)(void *);
-} stack;
+#include "stack.h"
 
 stack *create_stack(size_t size) {
 	stack *new = malloc(sizeof(stack));
 	new->size = size;
 	new->last = NULL;
+	new->length = 0;
 	return new;
 }
 
@@ -37,6 +27,7 @@ void push(stack *s, void *element) {
 	memcpy(new->current, element, s->size);
 	new->prev = s->last;
 	s->last = new;
+	s->length++;
 }
 
 int pop(stack *s, void *buf) {
@@ -50,5 +41,6 @@ int pop(stack *s, void *buf) {
 
 	free(tmp->current);
 	free(tmp);
+	s->length--;
 	return 1;
 }

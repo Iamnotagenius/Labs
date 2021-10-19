@@ -1,4 +1,4 @@
-SRC = mystrlib.c main.c stack.c queue.c
+SRC = main.c stack.c queue.c
 OBJS = ${SRC:.c=.o}
 
 .c.o:
