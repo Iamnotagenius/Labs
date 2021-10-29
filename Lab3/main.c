@@ -29,18 +29,26 @@ typedef struct {
 const char MONTHS[][4] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 						   "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-const char USAGE_MESSAGE[] = "Usage: %s log.txt [-t, --time TIME_WINDOW] [-e, --error-file FILE] [-f, --format ERROR_FORMAT]\n";
+const char USAGE_MESSAGE[] = "Usage: %s LOG_FILE [-t, --time TIME_WINDOW] [-e, --error-file FILE] [-f, --format ERROR_FORMAT]\n";
 
 const char HELP[] = "NASA Log parser.\nAvailable options are:\n"
-					"    -t, --time         -- Searches time period when the highest amount of requests were handled (Default: 1 minute)\n"
+					"    -t, --time         -- Searches time period when the highest amount of requests were handled (Default: 1 minute).\n"
+					"        Time specifier could be provided as suffix to argument (20d, for example).\n" 
+					"        Possible time specifiers:\n"
+					"            m - minute (60 seconds)\n"
+					"            h - hour (60 minutes)\n"
+					"            d - day (24 hours)\n"
+					"            M - month (30 days)\n"
+					"            y - year (12 months)\n"
 					"    -e, --error-file   -- Dumps requests with 5xx status to specified file (Default: don't dump to anything)\n"
-					"    -f, --error-format -- Specify format for dumping errors. Available format specifiers:\n"
-					"        %%d - date of request\n"
-					"        %%a - remote address\n"
-					"        %%r - request\n"
-					"        %%s - status\n"
-					"        %%b - bytes send by request\n"
-					"        %%%% - literal '%'\n";
+					"    -f, --error-format -- Specify format for dumping errors.\n" 
+					"        Available format specifiers:\n"
+					"            %%d - date of request\n"
+					"            %%a - remote address\n"
+					"            %%r - request\n"
+					"            %%s - status\n"
+					"            %%b - bytes send by request\n"
+					"            %%%% - literal '%'\n";
 
 
 typedef const struct {
@@ -67,9 +75,26 @@ void assign_error_file(char *arg, void *pvar) {
 	*(FILE **)pvar = f;
 }
 
-void assign_int(char *arg, void *pvar) {
-	int d = atoi(arg);
-	*(int *)pvar = d;
+void assign_time(char *arg, void *pvar) {
+	int time;
+	char spec;
+	sscanf(arg, "%d%1c", &time, &spec);
+
+	switch (spec) {
+		case 'y':
+			time *= 12;
+		case 'M':
+			time *= 30;
+		case 'd':
+			time *= 24;
+		case 'h':
+			time *= 60;
+		case 'm':
+			time *= 60;
+
+	}
+
+	*(int *)pvar = time;
 }
 
 void assign_str(char *arg, void *pvar) {
@@ -79,7 +104,7 @@ void assign_str(char *arg, void *pvar) {
 
 const int TIME_DEFAULT = 60;
 const opt_t OPTIONS[] = {
-	{ 't', "time", true, assign_int },
+	{ 't', "time", true, assign_time },
 	{ 'e', "error-file", true, assign_error_file },
 	{ 'f', "error-format", true, assign_str }
 };
@@ -98,10 +123,10 @@ void parse_args(int argc, char **argv, ...) {
 	}
 	if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "--help") == 0) {
 		printf(HELP);
-		exit(1);
+		exit(0);
 	}
 	bool reading_args = true, is_log_file_provided = false;
-	int arg = 1, opt, opts_len = sizeof(OPTIONS)/sizeof(opt_t) + MANDATORY_ARGS,
+	int arg = 1, opts_len = sizeof(OPTIONS)/sizeof(opt_t) + MANDATORY_ARGS,
 			dashes;
 	va_list va_args;
 	void *args[opts_len];
