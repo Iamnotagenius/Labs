@@ -29,18 +29,29 @@ typedef struct {
 const char MONTHS[][4] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 						   "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-const char USAGE_MESSAGE[] = "Usage: %s log.txt [-t, --time TIME_WINDOW] [-e, --error-file FILE]\n";
+const char USAGE_MESSAGE[] = "Usage: %s log.txt [-t, --time TIME_WINDOW] [-e, --error-file FILE] [-f, --format ERROR_FORMAT]\n";
+
+const char HELP[] = "NASA Log parser.\nAvailable options are:\n"
+					"    -t, --time         -- Searches time period when the highest amount of requests were handled (Default: 1 minute)\n"
+					"    -e, --error-file   -- Dumps requests with 5xx status to specified file (Default: don't dump to anything)\n"
+					"    -f, --error-format -- Specify format for dumping errors. Available format specifiers:\n"
+					"        %%d - date of request\n"
+					"        %%a - remote address\n"
+					"        %%r - request\n"
+					"        %%s - status\n"
+					"        %%b - bytes send by request\n"
+					"        %%%% - literal '%'\n";
+
 
 typedef const struct {
 	char short_opt;
 	char *long_opt;
 	bool has_arg;
-	size_t size;
 	void (*assign)(char *arg, void *pvar);
-	const void *default_value;
 } opt_t;
 
 const int MANDATORY_ARGS = 1;
+const int MAX_FORMAT_LENGTH = 256;
 
 void assign_error_file(char *arg, void *pvar) {
 	if (strcmp(arg, "-") == 0) {
@@ -61,10 +72,16 @@ void assign_int(char *arg, void *pvar) {
 	*(int *)pvar = d;
 }
 
+void assign_str(char *arg, void *pvar) {
+	*(char **)pvar = malloc(MAX_FORMAT_LENGTH);
+	strncpy(*(char **)pvar, arg, MAX_FORMAT_LENGTH);
+}
+
 const int TIME_DEFAULT = 60;
 const opt_t OPTIONS[] = {
-	{ 't', "time", true, sizeof(int), assign_int, &TIME_DEFAULT },
-	{ 'e', "error-file", true, sizeof(FILE *), assign_error_file, NULL },
+	{ 't', "time", true, assign_int },
+	{ 'e', "error-file", true, assign_error_file },
+	{ 'f', "error-format", true, assign_str }
 };
 
 void invalid_option(char *opt, char *prog) {
@@ -76,9 +93,14 @@ void invalid_option(char *opt, char *prog) {
 void parse_args(int argc, char **argv, ...) {
 	if (argc < 2) {
 		fprintf(stderr, USAGE_MESSAGE, argv[0]);
+		printf("Type '%s -h' or '%s --help' to get help.\n", argv[0], argv[0]);
 		exit(1);
 	}
-	bool reading_args = true;
+	if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "--help") == 0) {
+		printf(HELP);
+		exit(1);
+	}
+	bool reading_args = true, is_log_file_provided = false;
 	int arg = 1, opt, opts_len = sizeof(OPTIONS)/sizeof(opt_t) + MANDATORY_ARGS,
 			dashes;
 	va_list va_args;
@@ -101,6 +123,10 @@ void parse_args(int argc, char **argv, ...) {
 				if (strcmp(argv[arg] + dashes, OPTIONS[i].long_opt) == 0 or 
 								argv[arg][dashes] == OPTIONS[i].short_opt and dashes == 1) {
 					if (OPTIONS[i].has_arg) {
+						if (arg + 1 >= argc) {
+							fprintf(stderr, "Provide an argument to '%s' option\n", argv[arg]);
+							exit(1);
+						}
 						OPTIONS[i].assign(argv[arg + 1], args[i + MANDATORY_ARGS]);
 						arg++;
 					}
@@ -119,9 +145,15 @@ void parse_args(int argc, char **argv, ...) {
 				exit(2);
 			}
 			*(FILE **)args[0] = log_file;
+			is_log_file_provided = true;
 		}
 end_while:
 		arg++;
+	}
+	if (!is_log_file_provided) {
+		fprintf(stderr, "Log file is not provided.\n");
+		fprintf(stderr, USAGE_MESSAGE, argv[0]);
+		exit(1);
 	}
 }
 
@@ -199,14 +231,78 @@ char *time_to_str(time_t time) {
 	return time_str;
 }
 
+void data_to_str(data_t data, char *format, char *buf) {
+	char *escsymb, *tmp;
+	while (*format) {
+		escsymb = strpbrk(format, "%\\");
+		if (escsymb == NULL) {
+			strcpy(buf, format);
+			break;
+		}
+		strncpy(buf, format, escsymb - format);
+		buf += escsymb - format;
+		if (*escsymb == '%') {
+			switch(*(escsymb + 1)) {
+				case 'a':
+					/* remote_addr */
+					strcpy(buf, data.remote_addr);
+					buf += strlen(data.remote_addr);
+					break;
+				case 'r':
+					/* request */
+					strcpy(buf, data.request);
+					buf += strlen(data.request);
+					break;
+				case 'd':
+					/* date */
+					tmp = time_to_str(data.date);
+					strcpy(buf, tmp);
+					buf += strlen(tmp);
+					free(tmp);
+					break;
+				case 'b':
+					/* bytes_send */
+					buf += sprintf(buf, "%d", data.bytes_send);
+					break;
+				case 's':
+					/* status */
+					buf += sprintf(buf, "%d", data.status);
+					break;
+				case '%':
+					*buf = '%';
+					buf++;
+			}
+		}
+		else if (*escsymb == '\\') {
+			switch(*(escsymb + 1)) {
+				case 't':
+					*buf = '\t';
+					break;
+				case 'n':
+					*buf = '\n';
+					break;
+				case 'r':
+					*buf = '\r';
+					break;
+				case '\\':
+					*buf = '\\';
+					break;
+				
+			}
+			buf++;
+		}
+		format = escsymb + 2;
+	}
+}
+
 int main(int argc, char** argv) {
 	int diff = 60;
 	FILE *error_file = NULL, *log_file;
-	char *buffer = malloc(BUFFER_SIZE);
+	char *buffer = malloc(BUFFER_SIZE), *error_format = "Error %s: %r";
 	data_t parsed;
 	stack *failed = create_stack(sizeof(data_t));
 	queue *times = create_queue(sizeof(time_t));
-	parse_args(argc, argv, &log_file, &diff, &error_file);
+	parse_args(argc, argv, &log_file, &diff, &error_file, &error_format);
 
 	struct {
 		int amount;
@@ -235,16 +331,20 @@ int main(int argc, char** argv) {
 		fscanf(log_file, " ");
 	}
 	
-	free(buffer);
 	
 	printf("There were %d server errors.\n", failed->length);
+	
 	while (pop(failed, &parsed)) {
 		char *time_str = time_to_str(parsed.date);
-		if (error_file != NULL)
-			fprintf(error_file, "[%s] (%s): Error %d\n", time_str, parsed.remote_addr, parsed.status);
+		if (error_file != NULL) {
+			data_to_str(parsed, error_format, buffer);
+			fprintf(error_file, "%s\n", buffer);
+		}
 		free_data(parsed);
 		free(time_str);
 	}
+
+	free(buffer);
 
 	printf("Most active time window\nfrom: %s\nto: %s\n(%d requests)\n", 
 					time_to_str(time_window.start),
