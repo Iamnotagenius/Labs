@@ -28,71 +28,44 @@ typedef struct {
 	
 const char MONTHS[][4] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 						   "Aug", "Sep", "Oct", "Nov", "Dec"};
-const char *ERROR_MESSAGES[] = {
-	"Internal Server Error",
-	"Not Implemented",
-	"Bad Gateway",
-	"Gateway Timeout",
-	"HTTP Version Not Supported",
-	"Variant Also Negotiates",
-	"Insufficient Storage",
-	"Loop Detected",
-	"Not Extended",
-	"Network Authentication Required"
-};
 
 const char USAGE_MESSAGE[] = "Usage: %s log.txt [-t, --time TIME_WINDOW] [-e, --error-file FILE]\n";
 
 typedef const struct {
 	char short_opt;
 	char *long_opt;
+	bool has_arg;
+	size_t size;
+	void (*assign)(char *arg, void *pvar);
+	const void *default_value;
 } opt_t;
-const int OPTION_LEN = 2;
+
+const int MANDATORY_ARGS = 1;
+
+void assign_error_file(char *arg, void *pvar) {
+	if (strcmp(arg, "-") == 0) {
+		*(FILE **)pvar = stdout;
+		return;
+	}
+
+	FILE *f = fopen(arg, "w");
+	if (f == NULL) {
+		fprintf(stderr, "Could not open file '%s'\n", arg);
+		exit(2);
+	}
+	*(FILE **)pvar = f;
+}
+
+void assign_int(char *arg, void *pvar) {
+	int d = atoi(arg);
+	*(int *)pvar = d;
+}
+
+const int TIME_DEFAULT = 60;
 const opt_t OPTIONS[] = {
-	{ 't', "time" },
-	{ 'e', "error-file" },
+	{ 't', "time", true, sizeof(int), assign_int, &TIME_DEFAULT },
+	{ 'e', "error-file", true, sizeof(FILE *), assign_error_file, NULL },
 };
-
-void assign_option(int opt, char *arg, void *buf[3]) {
-	switch (opt) {
-		case 0:
-			int d = atoi(arg);
-			memcpy(buf[0], &d, sizeof(int));
-			break;
-		case 1:	
-			if (strcmp(arg, "-") == 0) {
-				memcpy(buf[1], &stdout, sizeof(FILE *));
-				break;
-			}
-			FILE *f = fopen(arg, "w");
-			if (f == NULL) {
-				fprintf(stderr, "Could not open file '%s'\n", arg);
-				exit(2);
-			}
-			memcpy(buf[1], &f, sizeof(FILE *));
-			break;
-	}
-}
-
-int handle_short_option(char opt, char *arg, void *buf[3]) {
-	for (int i = 0; i < OPTION_LEN; ++i) {
-		if (opt == OPTIONS[i].short_opt) {
-			assign_option(i, arg, buf);
-			return 0;
-		}
-	}
-	return opt;
-}
-
-int handle_long_option(char *opt, char *arg, void *buf[3]) {
-	for (int i = 0; i < OPTION_LEN; ++i) {
-		if (strcmp(OPTIONS[i].long_opt, opt) == 0) {
-			assign_option(i, arg, buf);
-			return 0;
-		}
-	}
-	return 1;
-}
 
 void invalid_option(char *opt, char *prog) {
 	fprintf(stderr, "Invalid option '%s'\n", opt);
@@ -105,41 +78,39 @@ void parse_args(int argc, char **argv, ...) {
 		fprintf(stderr, USAGE_MESSAGE, argv[0]);
 		exit(1);
 	}
-	va_list args;
-	va_start(args, argv);
-	void *buf[3] = {
-		va_arg(args, void *),
-		va_arg(args, void *),
-		va_arg(args, void *)
-	};
 	bool reading_args = true;
-	int arg = 1, opt;
+	int arg = 1, opt, opts_len = sizeof(OPTIONS)/sizeof(opt_t) + MANDATORY_ARGS,
+			dashes;
+	va_list va_args;
+	void *args[opts_len];
+	
+	va_start(va_args, argv);
+	for (int i = 0; i < opts_len; ++i) {
+		args[i] = va_arg(va_args, void *);
+	}
+	va_end(va_args);
 	while (arg != argc) {
 		if (reading_args and argv[arg][0] == '-') {
-			if (argv[arg][1] == '-') {
-				if (strlen(argv[arg]) == 2) {
-					reading_args = false;
-					arg++;
-					continue;
-				}
-				if (handle_long_option(argv[arg] + 2, argv[arg + 1], buf)) {
-					invalid_option(argv[arg], argv[0]);
-				}
+			if (strcmp(argv[arg], "--") == 0) {
+				reading_args = false;
 				arg++;
+				continue;
 			}
-			else {
-				if (strlen(argv[arg]) == 1) {
-					invalid_option("-", argv[0]);
+			dashes = strspn(argv[arg], "-");
+			for (int i = 0; i < opts_len - MANDATORY_ARGS; ++i) {
+				if (strcmp(argv[arg] + dashes, OPTIONS[i].long_opt) == 0 or 
+								argv[arg][dashes] == OPTIONS[i].short_opt and dashes == 1) {
+					if (OPTIONS[i].has_arg) {
+						OPTIONS[i].assign(argv[arg + 1], args[i + MANDATORY_ARGS]);
+						arg++;
+					}
+					else {
+						OPTIONS[i].assign(argv[arg], NULL);
+					}
+					goto end_while;
 				}
-				
-				if ((opt = handle_short_option(argv[arg][1], argv[arg + 1], buf))) {
-					char *tmp = calloc(2, 1);
-					*tmp = opt;
-					invalid_option(tmp, argv[0]);
-					free(tmp);
-				}
-				arg++;
 			}
+			invalid_option(argv[arg], argv[0]);
 		}
 		else {
 			FILE *log_file = fopen(argv[arg], "r");
@@ -147,8 +118,9 @@ void parse_args(int argc, char **argv, ...) {
 				fprintf(stderr, "Could not open file '%s'\n", argv[arg]);
 				exit(2);
 			}
-			memcpy(buf[2], &log_file, sizeof(FILE *));
+			*(FILE **)args[0] = log_file;
 		}
+end_while:
 		arg++;
 	}
 }
@@ -228,15 +200,13 @@ char *time_to_str(time_t time) {
 }
 
 int main(int argc, char** argv) {
-	int diff = -1;
+	int diff = 60;
 	FILE *error_file = NULL, *log_file;
 	char *buffer = malloc(BUFFER_SIZE);
 	data_t parsed;
 	stack *failed = create_stack(sizeof(data_t));
 	queue *times = create_queue(sizeof(time_t));
-	parse_args(argc, argv, &diff, &error_file, &log_file);
-	if (diff == -1)
-		diff = 60;
+	parse_args(argc, argv, &log_file, &diff, &error_file);
 
 	struct {
 		int amount;
@@ -271,7 +241,7 @@ int main(int argc, char** argv) {
 	while (pop(failed, &parsed)) {
 		char *time_str = time_to_str(parsed.date);
 		if (error_file != NULL)
-			fprintf(error_file, "[%s] (%s) Error %d: %s\n", time_str, parsed.remote_addr, parsed.status, ERROR_MESSAGES[parsed.status % 100]);
+			fprintf(error_file, "[%s] (%s): Error %d\n", time_str, parsed.remote_addr, parsed.status);
 		free_data(parsed);
 		free(time_str);
 	}
