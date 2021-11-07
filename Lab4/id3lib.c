@@ -15,7 +15,7 @@ int read_synchsafe32 (FILE *file) {
     return from_synchsafe32(buffer);
 }
 
-int read_whole_id3v2_tag(FILE *audio_file, struct id3tag *result) {
+int read_id3v2_tag(FILE *audio_file, struct id3tag *result) {
     /* searching for tag id */
     {
         char id[4];
@@ -67,10 +67,12 @@ int read_whole_id3v2_tag(FILE *audio_file, struct id3tag *result) {
     }
     /* reading frames */
 
-    int frames_size = 0, i;
+    int frames_size = 0, i = -1;
+    char empty[4] = {0, 0, 0, 0};
     struct frame *frames = NULL;
     do
     {
+        i++;
         frames_size += sizeof(struct frame);
         frames = realloc(frames, frames_size);
         fread(frames[i].id, sizeof(char), sizeof(frames[i].id), audio_file);
@@ -78,8 +80,7 @@ int read_whole_id3v2_tag(FILE *audio_file, struct id3tag *result) {
         fread(&frames[i].flags, sizeof(char), sizeof(frames[i].flags), audio_file);
         frames[i].data = malloc(frames[i].size);
         fread(frames[i].data, sizeof(char), frames[i].size, audio_file);
-        i++;
-    } while (frames->id[0] != 0 and ftell(audio_file) - result->offset <= result->size);
+    } while (memcmp(frames[i].id, empty, 4) != 0 and ftell(audio_file) - result->offset <= result->size);
     
     result->frames = frames;
     result->frames_count = i;

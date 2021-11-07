@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     struct id3tag tag;
-    switch (read_whole_id3v2_tag(f, &tag)) {
+    switch (read_id3v2_tag(f, &tag)) {
     case TAG_NOT_FOUND:
         printf("ID3 tag has not been found.\n");
         return 1;

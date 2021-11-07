@@ -52,8 +52,7 @@ struct id3tag {
     int frames_count;
 };
 
-int read_whole_id3v2_tag(FILE *audio_file, struct id3tag *buf);
-struct frame *read_id3v2_tag_frames(FILE *audio_file, char *ids[4]);
+int read_id3v2_tag(FILE *audio_file, struct id3tag *buf);
 void write_id3v2_tag(FILE *audio_file, struct id3tag tag);
 void append_frame(FILE *audio_file, struct frame);
 void text_frame_to_str(struct frame text_frame, char *buf);
