@@ -1,7 +1,10 @@
+#include <stdio.h>
 #define ID3_IDENTIFIER "ID3"
 #define ID3_BACK_IDENTIFIER "3DI"
 #define ID3V2_VERSION 04
 #define ID3V2_REVISION 00
+
+#define MINIMUM_PADDING 1024
 
 #define UNSYNCHRONISATION_BIT   0b10000000
 #define EXTENDED_HEADER_BIT     0b01000000
@@ -32,6 +35,9 @@
 
 #define TAG_NOT_FOUND 1
 #define TAG_TOO_BIG_VERSION 2
+#define UPDATE_TAG 3
+
+#define SYNCHSAFE_MASK 0x7f
 
 struct frame {
     char id[4];
@@ -49,10 +55,9 @@ struct id3tag {
     char *extended_header;
     char restrictions;
     struct frame *frames;
-    int frames_count;
 };
 
 int read_id3v2_tag(FILE *audio_file, struct id3tag *buf);
-void write_id3v2_tag(FILE *audio_file, struct id3tag tag);
+void write_id3v2_tag(char *audio_file, struct id3tag *tag);
 void append_frame(FILE *audio_file, struct frame);
 void text_frame_to_str(struct frame text_frame, char *buf);
