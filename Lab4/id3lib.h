@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #define ID3_IDENTIFIER "ID3"
 #define ID3_BACK_IDENTIFIER "3DI"
 #define ID3V2_VERSION 04
@@ -59,5 +60,8 @@ struct id3tag {
 
 int read_id3v2_tag(FILE *audio_file, struct id3tag *buf);
 void write_id3v2_tag(char *audio_file, struct id3tag *tag);
+struct frame *get_frame(char *id, struct id3tag *tag);
+void put_frame(struct frame value, struct id3tag *tag);
 void append_frame(FILE *audio_file, struct frame);
-void text_frame_to_str(struct frame text_frame, char *buf);
+void text_frame_to_str(struct frame *text_frame, char *buf);
+struct frame *next(struct id3tag *tag);

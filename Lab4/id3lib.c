@@ -21,18 +21,25 @@ bool has_frame(char *id, struct id3tag *tag) {
 
 static int last_viewed = -1;
 struct frame *next(struct id3tag *tag) {
-    if (last_viewed == 628) {
+    while (memcmp(tag->frames[++last_viewed].id, "\0\0\0\0", 4) == 0
+           and last_viewed < 629) {
+    }
+    if (last_viewed > 628) {
         last_viewed = -1;
         return NULL;
-    }
-    while (memcmp(tag->frames[++last_viewed].id, "\0\0\0\0", 4) == 0) {
     }
     return tag->frames + last_viewed;
 }
 
-
 struct frame *get_frame(char *id, struct id3tag *tag) {
+    if (!has_frame(id, tag))
+        return NULL;
+    
     return tag->frames + hash_frame_id(id);
+}
+
+void put_frame(struct frame value, struct id3tag *tag) {
+    tag->frames[hash_frame_id(value.id)] = value;
 }
 
 void to_synchsafe32(int value, char *buf) {
@@ -142,6 +149,7 @@ int read_id3v2_tag(FILE *audio_file, struct id3tag *result) {
                 }
             }
             else {
+                memcpy(&frames[hashed].id, id, 4);
 
                 frames[hashed].size = read_synchsafe32(audio_file);
                 
@@ -178,9 +186,13 @@ void prepend_new_tag(FILE *audio_file, struct id3tag *tag) {
     while ((current = next(tag))) {
         char frame_header[10];
         memcpy(frame_header, current->id, 4);
+        printf("Writing: %s=%s\n",current->id, ((char*)current->data + 1));
         to_synchsafe32(current->size, frame_header + 4);
         memcpy(frame_header, current->flags, 2);
-        fwrite(frame_header, 1, 10, audio_file);
+        fwrite(current->id, 1, 4, audio_file);
+        write_synchsafe32(audio_file, current->size);
+        fwrite(current->flags, 1, 2, audio_file);
+        fwrite(current->data, 1, current->size, audio_file);
     }
 }
 
@@ -195,14 +207,14 @@ void write_id3v2_tag(char *filename, struct id3tag *tag) {
     if (size + offset >= tag->size) {
         prepend_new_tag(audio_file, tag);
         /* adding padding to the end of an old tag */
-        while (ftell(audio_file) <= size + offset + 10) {
+        while (ftell(audio_file) < size + offset + 10) {
             fputc(0, audio_file);
         }
         return;
     }
 
     FILE *temp = tmpfile();
-    fseek(audio_file, size, SEEK_CUR);
+    fseek(audio_file, size + 10, SEEK_SET);
     int c;
     while ((c = fgetc(audio_file)) != EOF) {
         fputc(c, temp);
@@ -237,7 +249,7 @@ void update_id3v2_tag(char *filename, struct frame *frames, int count) {
 
 }
 
-void text_frame_to_str(struct frame text_frame, char *buf) {
-    memcpy(buf, text_frame.data + 1, text_frame.size - 1);
-    buf[text_frame.size] = '\0';
+void text_frame_to_str(struct frame *text_frame, char *buf) {
+    memcpy(buf, text_frame->data + 1, text_frame->size - 1);
+    buf[text_frame->size] = '\0';
 }
