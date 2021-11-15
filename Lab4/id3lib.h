@@ -55,11 +55,17 @@ struct id3tag {
     char extended_flags;
     char *extended_header;
     char restrictions;
-    struct frame *frames;
+    struct frame_list *first;
+};
+
+struct frame_list {
+    struct frame frame;
+    struct frame_list *next;
 };
 
 int read_id3v2_tag(FILE *audio_file, struct id3tag *buf);
 void write_id3v2_tag(char *audio_file, struct id3tag *tag);
+void free_id3v2_tag(struct id3tag *tag);
 struct frame *get_frame(char *id, struct id3tag *tag);
 void put_frame(struct frame value, struct id3tag *tag);
 void append_frame(FILE *audio_file, struct frame);

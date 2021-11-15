@@ -6,40 +6,62 @@
 #include <stdbool.h>
 #include "id3lib.h"
 
-int from_synchsafe32(char safe[4]) {
-    return (safe[0] << 21) | (safe[1] << 14) | (safe[2] << 7) | (safe[3]);
-}
-    
-/* hashing algorithm which does not have collisions on declared frames */
-int hash_frame_id(char *id) {
-    return (id[0] + (id[1] << 3) + (id[2] << 6) + (id[3] << 9)) % 632;
-}
-
-bool has_frame(char *id, struct id3tag *tag) {
-    return memcmp(tag->frames[hash_frame_id(id)].id, "\0\0\0\0", 4) != 0;
-}
-
-static int last_viewed = -1;
-struct frame *next(struct id3tag *tag) {
-    while (memcmp(tag->frames[++last_viewed].id, "\0\0\0\0", 4) == 0
-           and last_viewed < 629) {
+bool has_frame(char id[4], struct id3tag *tag) {
+    struct frame_list *list = tag->first;
+    while (memcmp(list->frame.id, id, 4) != 0 or list != NULL) {
+        list = list->next;
     }
-    if (last_viewed > 628) {
-        last_viewed = -1;
-        return NULL;
-    }
-    return tag->frames + last_viewed;
+
+    return list == NULL;
 }
 
-struct frame *get_frame(char *id, struct id3tag *tag) {
-    if (!has_frame(id, tag))
-        return NULL;
+struct frame *get_frame(char id[4], struct id3tag *tag) {
+    struct frame_list *list = tag->first;
+    while (list != NULL) {
+        if (memcmp(list->frame.id, id, 4) == 0)
+            break;
+        list = list->next;
+    }
     
-    return tag->frames + hash_frame_id(id);
+    return list == NULL ? NULL : &list->frame;
 }
 
 void put_frame(struct frame value, struct id3tag *tag) {
-    tag->frames[hash_frame_id(value.id)] = value;
+    struct frame_list *new_node = malloc(sizeof(struct frame_list));
+    memcpy(&new_node->frame, &value, sizeof(struct frame));
+    new_node->next = tag->first;
+    tag->first = new_node;
+}
+
+void remove_frame(char id[4], struct id3tag *tag) {
+    struct frame_list *to_remove, **helper = &tag->first;
+    while (*helper != NULL or memcmp(id, (*helper)->frame.id, 4)) {
+        helper = &(*helper)->next;
+    }
+
+    if (*helper == NULL)
+        return;
+    
+    to_remove = *helper;
+    *helper = (*helper)->next;
+    free(to_remove);
+}
+
+void free_id3v2_tag(struct id3tag *tag) {
+    /* deleting frame list */
+    {
+        struct frame_list *tmp;
+        while (tag->first != NULL) {
+            tmp = tag->first;
+            tag->first = tag->first->next;
+            free(tmp);
+        }
+    }
+    free(tag->extended_header);
+}
+
+int from_synchsafe32(char safe[4]) {
+    return (safe[0] << 21) | (safe[1] << 14) | (safe[2] << 7) | (safe[3]);
 }
 
 void to_synchsafe32(int value, char *buf) {
@@ -96,12 +118,15 @@ int read_tag_header(FILE *audio_file, struct id3tag *tag) {
     tag->size = read_synchsafe32(audio_file);
     if (tag->flags & EXTENDED_HEADER_BIT) {
         tag->extended_header_size = read_synchsafe32(audio_file);
+        tag->extended_header = tag->extended_header_size > 0 ? malloc(tag->extended_header_size) : NULL;
         fseek(audio_file, 1, SEEK_CUR);
         tag->extended_flags = fgetc(audio_file);
+        fread(tag->extended_header, 1, tag->extended_header_size, audio_file);
     }
     else {
         tag->extended_header_size = 0;
         tag->extended_flags = 0;
+        tag->extended_header = NULL;
     }
     
     /* skipping flags' data */
@@ -123,47 +148,42 @@ int read_id3v2_tag(FILE *audio_file, struct id3tag *result) {
     if (read_tag_header(audio_file, result) < 0) {
         return -result->offset;
     }
-
+    result->first = NULL;
     /* reading frames */
     {
-        /* magic number (maximum possible index) */
-        struct frame *frames = calloc(629, sizeof(struct frame));
-        char id[4];
+        struct frame read;
         do
         {
-            int hashed;
-            fread(id, sizeof(char), sizeof(id), audio_file);
-            hashed = hash_frame_id(id);
+            
+            fread(&read.id, 1, 4, audio_file);
             if (result->extended_flags & IS_UPDATE_BIT) {
+                struct frame *frame = get_frame(read.id, result);
                 
-                if (!has_frame(id, result)) {
-                    memcpy(result->frames[hashed].id, id, 4);
-                }
-                
-                frames[hashed].size = read_synchsafe32(audio_file);
-                fread(&frames[hashed].flags, sizeof(char), sizeof(frames[hashed].flags), audio_file);
-                fread(&frames[hashed].flags, sizeof(char), sizeof(frames[hashed].flags), audio_file);
-                if (realloc(frames[hashed].data, frames[hashed].size) == NULL) {
-                    fprintf(stderr, "Memory allocation error (at read_id3v2_tag)\n");
-                    exit(1);
+                read.size = read_synchsafe32(audio_file);
+                fread(&read.flags, sizeof(char), sizeof(read.flags), audio_file);
+                fread(&read.flags, sizeof(char), sizeof(read.flags), audio_file);
+                realloc(read.data, read.size);
+                if (frame != NULL) {
+                    free(frame->data);
+                    frame->data = read.data;
                 }
             }
             else {
-                memcpy(&frames[hashed].id, id, 4);
 
-                frames[hashed].size = read_synchsafe32(audio_file);
+                read.size = read_synchsafe32(audio_file);
                 
-                fread(&frames[hashed].flags, sizeof(char), sizeof(frames[hashed].flags), audio_file);
+                fread(&read.flags, sizeof(char), sizeof(read.flags), audio_file);
                 
-                frames[hashed].data = malloc(frames[hashed].size);
+                read.data = malloc(read.size);
                 
-                fread(frames[hashed].data, sizeof(char), frames[hashed].size, audio_file);
+                fread(read.data, sizeof(char), read.size, audio_file);
             }
-            
+
+            if (memcmp(read.id, "\0\0\0\0", 4) != 0)
+                put_frame(read, result);
             /* keep reading until reaching padding or end of a tag */
-        } while (memcmp(id, "\0\0\0\0", 4) != 0 and 
+        } while (memcmp(read.id, "\0\0\0\0", 4) != 0 and 
                 ftell(audio_file) - result->offset <= result->size);
-        result->frames = frames;
     }
     
     return 0;
@@ -172,64 +192,47 @@ int read_id3v2_tag(FILE *audio_file, struct id3tag *result) {
 void prepend_new_tag(FILE *audio_file, struct id3tag *tag) {
     rewind(audio_file);
     /* writing header */
-    char header[10] = "ID3";
-    header[3] = ID3V2_VERSION;
-    header[4] = ID3V2_REVISION;
-    header[5] = tag->flags;
-    to_synchsafe32(tag->size, header + 6);
-    fwrite(header, 1, 10, audio_file);
-    
+    fwrite("ID3", 3, 1, audio_file);
+    fputc(ID3V2_VERSION, audio_file);
+    fputc(ID3V2_REVISION, audio_file);
+    fputc(tag->flags, audio_file);
+    write_synchsafe32(audio_file, tag->size + MINIMUM_PADDING);
     /* maybe i should write extended header here... */
 
     /* writing tags */
-    struct frame *current;
-    while ((current = next(tag))) {
-        char frame_header[10];
-        memcpy(frame_header, current->id, 4);
-        printf("Writing: %s=%s\n",current->id, ((char*)current->data + 1));
-        to_synchsafe32(current->size, frame_header + 4);
-        memcpy(frame_header, current->flags, 2);
-        fwrite(current->id, 1, 4, audio_file);
-        write_synchsafe32(audio_file, current->size);
-        fwrite(current->flags, 1, 2, audio_file);
-        fwrite(current->data, 1, current->size, audio_file);
+    struct frame_list *list = tag->first;
+    while (list != NULL) {
+        fwrite(list->frame.id, 1, 4, audio_file);
+        write_synchsafe32(audio_file, list->frame.size);
+        fwrite(list->frame.flags, 1, 2, audio_file);
+        fwrite(list->frame.data, 1, list->frame.size, audio_file);
+        list = list->next;
+    }
+    for (int i = 0; i < MINIMUM_PADDING; ++i) {
+        fputc(0, audio_file);
     }
 }
 
 
 void write_id3v2_tag(char *filename, struct id3tag *tag) {
     FILE *audio_file = fopen(filename, "r+b");
-    int offset = search_id3_identifier(audio_file);
-
-    fseek(audio_file, 6, SEEK_CUR);
-    int size = read_synchsafe32(audio_file);
-    /* if there's enough space before audio data, don't do thing with temp file */
-    if (size + offset >= tag->size) {
-        prepend_new_tag(audio_file, tag);
-        /* adding padding to the end of an old tag */
-        while (ftell(audio_file) < size + offset + 10) {
-            fputc(0, audio_file);
-        }
-        return;
-    }
-
     FILE *temp = tmpfile();
-    fseek(audio_file, size + 10, SEEK_SET);
-    int c;
-    while ((c = fgetc(audio_file)) != EOF) {
-        fputc(c, temp);
+    int offset = search_id3_identifier(audio_file), size;
+    fseek(audio_file, 1, SEEK_CUR);
+    size = read_synchsafe32(audio_file);
+    fseek(audio_file, size, SEEK_CUR);
+    /* writing data to temp file */
+    prepend_new_tag(temp, tag);
+    while (!feof(audio_file)) {
+        fputc(fgetc(audio_file), temp);
     }
-
-    prepend_new_tag(audio_file, tag);
-    while (ftell(audio_file) <= 10 + tag->size) {
-        fputc(0, audio_file);
-    }
-
-    /* appending data from temp file */
     rewind(temp);
-    while ((c = fgetc(temp)) != EOF) {
-        fputc(c, audio_file);
+    rewind(audio_file);
+
+    while (!feof(temp)) {
+        fputc(fgetc(temp), audio_file);
     }
+
     fclose(temp);
     fclose(audio_file);
 }

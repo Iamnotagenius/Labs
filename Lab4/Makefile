@@ -12,5 +12,4 @@ build: ${OBJS}
 	${CC} ${OBJS} -o ${OUT}
 
 debug: ${OBJS}
-	${CC} -Wall -g -c ${CFLAGS} ${SRC}
-	${CC} -g ${OBJS}
+	${CC} -Wall -g ${SRC}
