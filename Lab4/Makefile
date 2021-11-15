@@ -1,11 +1,15 @@
-SRC = main.c id3lib.c
-OBJS = ${SRC:.c=.o}
+OUT = a.out
+OBJDIR = obj
+SRC = main.c id3lib.c argparse.c
+OBJS = $(patsubst %,${OBJDIR}/%,${SRC:.c=.o})
 
-.c.o:
-	${CC} -c ${CFLAGS} $<
+all: build ${OBJS}
 
-main: ${OBJS}
-	${CC} ${OBJS}
+$(OBJS): obj/%.o: %.c
+	${CC} -c ${CFLAGS} $< -o $@
+
+build: ${OBJS}
+	${CC} ${OBJS} -o ${OUT}
 
 debug: ${OBJS}
 	${CC} -Wall -g -c ${CFLAGS} ${SRC}
