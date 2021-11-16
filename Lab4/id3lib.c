@@ -31,6 +31,7 @@ void put_frame(struct frame value, struct id3tag *tag) {
     memcpy(&new_node->frame, &value, sizeof(struct frame));
     new_node->next = tag->first;
     tag->first = new_node;
+    tag->size += 10 + tag->first->frame.size;
 }
 
 void remove_frame(char id[4], struct id3tag *tag) {
@@ -250,6 +251,129 @@ void update_id3v2_tag(char *filename, struct frame *frames, int count) {
         exit(EXIT_FAILURE);
     }
 
+}
+
+void put_text_frame(char id[4], char *str, struct id3tag *tag) {
+    {
+        struct frame *existing = get_frame(id, tag);
+        if (existing) {
+            existing->size = strlen(str) + 1;
+            realloc(existing->data, existing->size);
+            ((char *)existing->data)[0] = 0;
+            memcpy(existing->data + 1, str, existing->size - 1);
+            return;
+        }
+    }
+    struct frame new;
+    memcpy(&new.id, id, 4);
+    memset(&new.flags, 0, 2);
+    new.size = strlen(str) + 1;
+    new.data = malloc(new.size + 1);
+    ((char *)new.data)[0] = 0;
+    memcpy(new.data + 1, str, new.size - 1);
+
+    put_frame(new, tag);
+}
+
+int get_png_size(char *filename, int *height, int *width) {
+    FILE *picture = fopen(filename, "rb");
+    char signature[8];
+    fread(signature, 1, 8, picture);
+    if (memcmp(signature, "\211PNG\r\n\032\n", 8) != 0) {
+        fclose(picture);
+        return 1;
+    }
+    fseek(picture, 4, SEEK_CUR);
+    fread(width, 4, 1, picture);
+    fread(height, 4, 1, picture);
+    fclose(picture);
+    return 0;
+}
+
+
+int put_picture_frame(char *filename, bool ref, char type, char *description, struct id3tag *tag) {
+    if (type == 1) {
+        int width, height;
+        if (get_png_size(filename, &height, &width) != 0)
+            return 1;
+
+        if (width != 32 or height != 32) {
+            return 2;
+        }
+    }
+
+    char *data, *cursor;
+    description = description == NULL ? "" : description;
+    int size;
+    if (ref) {
+        size = 7 + strlen(filename) + strlen(description);
+        data = malloc(size);
+        cursor = data;
+        *cursor = 0;
+        cursor++;
+        memcpy(cursor, "-->", 4);
+        cursor += 4;
+        *cursor = type;
+        cursor++;
+        strcpy(cursor, description);
+        cursor += strlen(description) + 1;
+        memcpy(cursor, filename, strlen(filename));
+
+        struct frame new = {
+            "APIC",
+            size,
+            {0, 0},
+            data
+        };
+        put_frame(new, tag);
+        return 0;
+    }
+
+    char *extension = strrchr(filename, '.') + 1,
+        mime_type[11];
+
+    strcpy(mime_type, "image/");
+    if (strcmp(extension, "jpeg") == 0 or strcmp(extension, "jpg") == 0) {
+        strcat(mime_type, "jpeg");
+    }
+    else if (strcmp(extension, "png") == 0) {
+        strcat(mime_type, "png");
+    }
+
+    FILE *picture = fopen(filename, "r");
+    if (picture == NULL)
+        return 1;
+    
+
+    fseek(picture, 0L, SEEK_END);
+    long filesize = ftell(picture);
+    rewind(picture);
+
+    size = 7 + strlen(mime_type) + strlen(description) + filesize;
+
+    data = malloc(size);
+    cursor = data;
+    *cursor = 0;
+    cursor++;
+    strcpy(cursor, mime_type);
+    cursor += strlen(mime_type) + 1;
+    *cursor = type;
+    cursor++;
+    strcpy(cursor, description);
+    cursor += strlen(description) + 1;
+    while (!feof(picture)) {
+        *cursor = fgetc(picture);
+        cursor++;
+    }
+
+    struct frame new = {
+        "APIC",
+        size,
+        {0, 0},
+        data
+    };
+    put_frame(new, tag);
+    return 0;
 }
 
 void text_frame_to_str(struct frame *text_frame, char *buf) {

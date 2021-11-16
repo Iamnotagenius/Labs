@@ -37,8 +37,8 @@ int main(int argc, char **argv) {
                 text_frame_to_str(&list->frame, buffer);
                 printf("%4s\t%s\n", id, buffer);
                 free(buffer);
-                list = list->next;
             }
+            list = list->next;
         }
         return 0;
     }
@@ -69,20 +69,15 @@ int main(int argc, char **argv) {
         key = strtok(to_set, "=");
         value = strtok(NULL, ",");
         do {
-            new.size = strlen(value) + 1;
-            memcpy(new.id, key, 4);
-            if ((existing = get_frame(key, &tag))) {
-                tag.size += new.size - existing->size;
+            if (key[0] == 'T') {
+                put_text_frame(key, value, &tag);
             }
-            else {
-                tag.size += new.size + 10;
+            else if (strcmp(key, "APIC") == 0) {
+                char *token = strtok(value, ":"), *name = strtok(NULL, ":");
+                int type;
+                sscanf(token, "%02x", &type);
+                put_picture_frame(name, token[2] != '%', type, strtok(NULL, ","), &tag);
             }
-            memset(new.flags, 0, 2);
-            new.data = malloc(new.size);
-            ((char*)new.data)[0] = 0;
-            memcpy(new.data + 1, value, new.size - 1);
-            put_frame(new, &tag);
-
         } while ((key = strtok(NULL, "="), value = strtok(NULL, ",")));
         write_id3v2_tag(filename, &tag);
     }

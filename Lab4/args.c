@@ -7,7 +7,9 @@ const char USAGE_MESSAGE[] = "Usage: %s file.mp3 [-g, --get FRAME1,FRAME2,FRAME3
 const char HELP[] = "ID3V2 tag parser. Without arguments prints out all text and comment frames. \nAvailable options are:\n"
 					"    -g, --get     -- Prints out only specified frames\n"
                     "    -s, --set     -- Sets values to frames\n"
-                    "    -R, --rewrite -- Rewrite the whole tag";
+                    "    -R, --rewrite -- Rewrite the whole tag\n"
+                    "The format of APIC frame is: APIC=[%%]xx;picture.png;Some description\n"
+                    "Where xx is the hexadecimal picture type and if you want to embed an image, precede a %% before type\n";
 
 
 void set_switch(char *arg, void *pvar) {

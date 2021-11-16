@@ -68,6 +68,6 @@ void write_id3v2_tag(char *audio_file, struct id3tag *tag);
 void free_id3v2_tag(struct id3tag *tag);
 struct frame *get_frame(char *id, struct id3tag *tag);
 void put_frame(struct frame value, struct id3tag *tag);
-void append_frame(FILE *audio_file, struct frame);
+void put_text_frame(char id[4], char *str, struct id3tag *tag);
+int put_picture_frame(char *filename, bool ref, char type, char *description, struct id3tag *tag);
 void text_frame_to_str(struct frame *text_frame, char *buf);
-struct frame *next(struct id3tag *tag);
