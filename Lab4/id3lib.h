@@ -48,6 +48,7 @@ struct frame {
 };
 
 struct id3tag {
+    char version[2];
     char flags;
     int offset;
     unsigned int size;
