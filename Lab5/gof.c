@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iso646.h>
+#include <stdint.h>
 
 #include "gof.h"
 
@@ -38,10 +40,10 @@ gof_field_t *get_from_bmp(FILE *bmp) {
     PRINT_DEBUG("pixel_array_offset = %X, %dx%d", pixel_array_offset, width, height)
 #endif
 
-    gof_field_t *new_field = malloc(sizeof(gof_field_t) + (width + 1)/2 * (height + 2));
+    gof_field_t *new_field = malloc(sizeof(gof_field_t) + (width + 2) * (height + 2));
     new_field->width = width;
     new_field->height = height;
-    new_field->row_size = (width + 1)/2;
+    new_field->row_size = width + 2;
     memset(new_field->field, 0, new_field->row_size * (height + 2));
 
     short bpp;
@@ -53,7 +55,6 @@ gof_field_t *get_from_bmp(FILE *bmp) {
 
     unsigned pixel_mask = (1 << bpp) - 1, bmp_row_size = (bpp * width + 31) / 32 * 4;
     unsigned char bmp_row[bmp_row_size];
-    char cell_mask = 0x10;
 
     for (int row = height * new_field->row_size; row >= new_field->row_size; row -= new_field->row_size) {
         pixel_mask = 1 << (8 - bpp);
@@ -61,8 +62,7 @@ gof_field_t *get_from_bmp(FILE *bmp) {
         for (int pixel = 0; pixel < width; ++pixel) {
             int bits = bpp < 8 ? pixel_mask & bmp_row[(bpp * pixel) / 8]
                                : memcmp(&bmp_row[(bpp * pixel) / 8], "\xff\xff\xff\xff", bpp / 8) == 0;
-            new_field->field[row + pixel / 2] |= cell_mask & (bits ? 0xFF : 0);
-            cell_mask ^= 0x11; /* changing "half" of byte */
+            new_field->field[row + pixel + 1] = bits != 0;
             pixel_mask >>= bpp;
             if (!pixel_mask)
                 pixel_mask = 1 << (8 - bpp);
@@ -77,6 +77,7 @@ gof_field_t *get_from_bmp(FILE *bmp) {
     free(full_header);
     return new_field;
 }
+
 
 void dump_field(gof_field_t *field, FILE *bmp) {
     char header[62];
@@ -98,13 +99,58 @@ void dump_field(gof_field_t *field, FILE *bmp) {
 
     unsigned int row_size = (field->width + 31) / 32 * 4;
     unsigned char pixel_row[row_size];
-    for (int row = field->height * field->row_size; row >= field->row_size; row -= field->row_size) {
+    for (int row = (field->height - 1) * field->row_size; row >= field->row_size; row -= field->row_size) {
         memset(pixel_row, 0, row_size);
-        for (int pixel = 0; pixel < field->row_size; ++pixel) {
-            int bits = field->field[row + pixel] % 14;
-            pixel_row[pixel / 4] |= bits << ((3 - (pixel % 4)) << 1); 
+        for (int pixel = 1; pixel < field->row_size - 1; ++pixel) {
+            int bits = field->field[row + pixel];
+            pixel_row[pixel / 8] |= bits << (7 - (pixel % 8)); 
         }
         fwrite(pixel_row, 1, row_size, bmp);
     }
+}
+
+void perform_iteration(gof_field_t *field) {
+    static gof_field_t *counter_field = NULL;
+
+    if (counter_field == NULL or counter_field->height != field->height or counter_field->width != field->width) {
+        counter_field = realloc(counter_field, sizeof(gof_field_t) + (field->width + 2) * (field->height + 2));
+        counter_field->height = field->height;
+        counter_field->width = field->width;
+    }
+
+    for (int i = field->row_size + 1; i < field->row_size * (field->height - 1) - 1; i += 8) {
+        uint64_t *neighbours = (uint64_t *)(counter_field->field + i);
+        *neighbours += *(uint64_t*)(field->field + i - field->row_size - 1);
+        *neighbours += *(uint64_t*)(field->field + i - field->row_size);
+        *neighbours += *(uint64_t*)(field->field + i - field->row_size + 1);
+        *neighbours += *(uint64_t*)(field->field + i - 1);
+        *neighbours += *(uint64_t*)(field->field + i + 1);
+        *neighbours += *(uint64_t*)(field->field + i + field->row_size - 1);
+        *neighbours += *(uint64_t*)(field->field + i + field->row_size);
+        *neighbours += *(uint64_t*)(field->field + i + field->row_size + 1);
+    }
+    for (int i = field->row_size; i < field->row_size * (field->height - 1); i += 8) {
+        uint64_t neighbours = *(uint64_t *)(counter_field->field + i) & 0x0707070707070707;
+        uint64_t alive = *(uint64_t *)(field->field + i);
+        uint64_t combined_state = (alive << 3) | neighbours;
+
+        combined_state ^= 0x0404040404040404;
+
+        uint64_t keep_alive = combined_state & 0x0E0E0E0E0E0E0E0E;
+        keep_alive &= (keep_alive >> 1);
+        keep_alive &= (keep_alive >> 1);
+        keep_alive >>= 1;
+
+        uint64_t make_new_life = combined_state & 0x0707070707070707;
+        make_new_life &= (make_new_life >> 1);
+        make_new_life &= (make_new_life >> 1);
+
+        *(uint64_t *)(field->field + i) = keep_alive | make_new_life;
+    }
+    for (int i = field->row_size; i < field->row_size * field->height; i += field->row_size) {
+        field->field[i] = 0;
+        field->field[i + field->row_size - 1] = 0;
+    }
+    memset(counter_field->field, 0, (field->width + 2) * (field->height + 2));
 }
 
