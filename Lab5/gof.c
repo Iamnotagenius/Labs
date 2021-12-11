@@ -120,13 +120,21 @@ void perform_iteration(gof_field_t *field) {
 
     for (int i = field->row_size + 1; i < field->row_size * (field->height - 1) - 1; i += 8) {
         uint64_t *neighbours = (uint64_t *)(counter_field->field + i);
+        /* top left */
         *neighbours += *(uint64_t*)(field->field + i - field->row_size - 1);
+        /* top */
         *neighbours += *(uint64_t*)(field->field + i - field->row_size);
+        /* top right */
         *neighbours += *(uint64_t*)(field->field + i - field->row_size + 1);
+        /* left */
         *neighbours += *(uint64_t*)(field->field + i - 1);
+        /* right */
         *neighbours += *(uint64_t*)(field->field + i + 1);
+        /* bottom left */
         *neighbours += *(uint64_t*)(field->field + i + field->row_size - 1);
+        /* bottom */
         *neighbours += *(uint64_t*)(field->field + i + field->row_size);
+        /* bottom right */
         *neighbours += *(uint64_t*)(field->field + i + field->row_size + 1);
     }
     for (int i = field->row_size; i < field->row_size * (field->height - 1); i += 8) {
@@ -134,18 +142,12 @@ void perform_iteration(gof_field_t *field) {
         uint64_t alive = *(uint64_t *)(field->field + i);
         uint64_t combined_state = (alive << 3) | neighbours;
 
-        combined_state ^= 0x0404040404040404;
+        /* not B and C and (A or D) */
+        combined_state = ((combined_state ^ 0x0404040404040404) >> 2) & /* not B */
+                         (combined_state >> 1) & /* C */
+                         ((combined_state >> 3) | combined_state); /* A or D */
 
-        uint64_t keep_alive = combined_state & 0x0E0E0E0E0E0E0E0E;
-        keep_alive &= (keep_alive >> 1);
-        keep_alive &= (keep_alive >> 1);
-        keep_alive >>= 1;
-
-        uint64_t make_new_life = combined_state & 0x0707070707070707;
-        make_new_life &= (make_new_life >> 1);
-        make_new_life &= (make_new_life >> 1);
-
-        *(uint64_t *)(field->field + i) = keep_alive | make_new_life;
+        *(uint64_t *)(field->field + i) = combined_state;
     }
     for (int i = field->row_size; i < field->row_size * field->height; i += field->row_size) {
         field->field[i] = 0;
