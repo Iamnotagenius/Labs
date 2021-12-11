@@ -109,7 +109,6 @@ int search_id3_identifier(FILE *audio_file) {
 }
 
 int read_tag_header(FILE *audio_file, struct id3tag *tag) {
-
     tag->offset = search_id3_identifier(audio_file);
     if (tag->offset < 0)
         return tag->offset;
@@ -396,7 +395,7 @@ void text_frame_to_str(struct frame *text_frame, char *buf) {
     else if (memcmp(text_frame->id, "COMM", 4) == 0) {
         strcpy(buf, text_frame->data + 4);
         strcat(buf, strlen(text_frame->data + 4) ? ": " : "");
-        strncat(buf, text_frame->data + strlen(text_frame->data + 4) + 5,
+        strncat(buf, text_frame->data + strlen(text_frame->data + 4) + 5, 
             text_frame->size - strlen(text_frame->data + 4) - 5);
     }
     else if (memcmp(text_frame->id, "APIC", 4) == 0) {
