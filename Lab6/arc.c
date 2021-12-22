@@ -11,7 +11,7 @@
 #include <direct.h>
 #endif
 
-static char* prog_name; 
+static const char* prog_name; 
 #define ERROR(msg, code, ...) fprintf(stderr, "%s: " msg "\n", prog_name, __VA_ARGS__); \
                          exit(code)
 
@@ -19,11 +19,11 @@ static char* prog_name;
 #define LEN(arr) sizeof(arr)/sizeof(arr[0])
 #define MAX_FILENAME 128
 
-void set_prog_name(char *name) {
+void set_prog_name(const char *name) {
     prog_name = name;
 }
 
-void write_file_to_arc(FILE *arc, char *filename) {
+void write_file_to_arc(FILE *arc, const char *filename) {
     unsigned size;
     int c;
     fwrite(filename, 1, strlen(filename), arc);
@@ -33,6 +33,7 @@ void write_file_to_arc(FILE *arc, char *filename) {
     if (file == NULL) {
         ERROR("%s: No such file or directory", 2, filename);
     }
+    
     fseek(file, 0, SEEK_END);
     size = ftell(file);
     rewind(file);
@@ -54,8 +55,18 @@ int read_filename(FILE *arc, char *filename) {
     return 0;
 }
 
-FILE *open_and_check_arc(char *arcname) {
-    FILE *arc = fopen(arcname, "rb");
+FILE *open_arc(const char *arcname, const char *mode) {
+    if (strstr(arcname, ".arc") != NULL)
+        return fopen(arcname, mode);
+        
+    char extended_name[strlen(arcname) + 5];
+    strcpy(extended_name, arcname);
+    strcat(extended_name, ".arc");
+    return fopen(extended_name, mode);
+}
+
+FILE *open_arc_for_read(const char *arcname) {
+    FILE *arc = open_arc(arcname, "rb");
     if (arc == NULL) {
         ERROR("Could not open file '%s'", 1, arcname);
     }
@@ -69,8 +80,8 @@ FILE *open_and_check_arc(char *arcname) {
     return arc;
 }
 
-void create_archive(char *arcname, int count, char **files) {
-    FILE *arc = fopen(arcname, "wb");
+void create_archive(const char *arcname, int count, char **files) {
+    FILE *arc = open_arc(arcname, "wb");
     if (arc == NULL) {
         ERROR("Could not open file '%s'", 1, arcname);
     }
@@ -81,8 +92,8 @@ void create_archive(char *arcname, int count, char **files) {
     fclose(arc);
 }
 
-void list_files(char *arcname) {
-    FILE *arc = open_and_check_arc(arcname);
+void list_files(const char *arcname) {
+    FILE *arc = open_arc_for_read(arcname);
     while (!feof(arc)) {
         char filename[MAX_FILENAME];
         int i = 0;
@@ -97,8 +108,8 @@ void list_files(char *arcname) {
     fclose(arc);
 }
 
-void extract_files(char *arcname) {
-    FILE *arc = open_and_check_arc(arcname);
+void extract_files(const char *arcname) {
+    FILE *arc = open_arc_for_read(arcname);
     char *dirname = strdup(arcname);
     if (strstr(dirname, ".arc") != NULL) {
         *strrchr(dirname, '.') = '\0';
@@ -149,14 +160,14 @@ void extract_files(char *arcname) {
     fclose(arc);
 }
 
-void append_files(char *arcname, int count, char **files) {
-    FILE *arc = fopen(arcname, "rb");
+void append_files(const char *arcname, int count, char **files) {
+    FILE *arc = open_arc_for_read(arcname);
     if (arc == NULL) {
         create_archive(arcname, count, files);
         return;
     }
     fclose(arc);
-    fopen(arcname, "ab");
+    open_arc(arcname, "ab");
 
     for (int i = 0; i < count; ++i) {
         write_file_to_arc(arc, files[i]);
