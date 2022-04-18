@@ -11,7 +11,12 @@
 
 int main(int argc, char **argv) {
     set_prog_name(argv[0]);
-    if (strcmp(argv[1], "help") == 0) {
+    if (argc < 2) {
+        PRINT_USAGE;
+        exit(1);
+    }
+    char *command = argv[1] + strspn(argv[1], "-");
+    if (strcmp(command, "help") == 0 or strcmp(command, "h") == 0) {
         printf(
             "Archiver.\n"
             "Usage: %s command archive.arc FILE1 FILE2 FILE3 ... FILEN\n"
@@ -26,7 +31,6 @@ int main(int argc, char **argv) {
         printf("Type 'help' to get help.\n");
         exit(1);
     }
-    char *command = argv[1] + strspn(argv[1], "-");
     if (strlen(command) == 1) {
         switch (*command) {
             case 'l':

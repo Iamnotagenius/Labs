@@ -33,7 +33,10 @@ int main(int argc, char **argv) {
         SDL_CreateWindowAndRenderer(f->width, f->height, 0, &window, &renderer);
         SDL_SetWindowTitle(window, "Game of Life");
         SDL_SetWindowAlwaysOnTop(window, SDL_FALSE);
-        update_image(surface, renderer, input_bmp);
+        surface = SDL_LoadBMP(input_bmp);
+        texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_RenderPresent(renderer);
     }
 #endif
 

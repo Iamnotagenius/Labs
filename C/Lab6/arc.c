@@ -11,13 +11,14 @@
 #include <direct.h>
 #endif
 
-static const char* prog_name; 
 #define ERROR(msg, code, ...) fprintf(stderr, "%s: " msg "\n", prog_name, __VA_ARGS__); \
                          exit(code)
 
 #define ARC_SIGNATURE "LOL123"
 #define LEN(arr) sizeof(arr)/sizeof(arr[0])
 #define MAX_FILENAME 128
+
+static const char* prog_name; 
 
 void set_prog_name(const char *name) {
     prog_name = name;
@@ -26,7 +27,6 @@ void set_prog_name(const char *name) {
 void write_file_to_arc(FILE *arc, const char *filename) {
     unsigned size;
     int c;
-    fwrite(filename, 1, strlen(filename), arc);
     fputc(0, arc);
     
     FILE *file = fopen(filename, "rb");
@@ -37,6 +37,8 @@ void write_file_to_arc(FILE *arc, const char *filename) {
     fseek(file, 0, SEEK_END);
     size = ftell(file);
     rewind(file);
+
+    fwrite(filename, 1, strlen(filename), arc);
     fwrite(&size, sizeof size, 1, arc);
     while ((c = fgetc(file)) != EOF) {
         fputc(c, arc);
@@ -65,7 +67,7 @@ FILE *open_arc(const char *arcname, const char *mode) {
     return fopen(extended_name, mode);
 }
 
-FILE *open_arc_for_read(const char *arcname) {
+FILE *open_arc_for_read_and_check(const char *arcname) {
     FILE *arc = open_arc(arcname, "rb");
     if (arc == NULL) {
         ERROR("Could not open file '%s'", 1, arcname);
@@ -93,7 +95,7 @@ void create_archive(const char *arcname, int count, char **files) {
 }
 
 void list_files(const char *arcname) {
-    FILE *arc = open_arc_for_read(arcname);
+    FILE *arc = open_arc_for_read_and_check(arcname);
     while (!feof(arc)) {
         char filename[MAX_FILENAME];
         int i = 0;
@@ -109,7 +111,7 @@ void list_files(const char *arcname) {
 }
 
 void extract_files(const char *arcname) {
-    FILE *arc = open_arc_for_read(arcname);
+    FILE *arc = open_arc_for_read_and_check(arcname);
     char *dirname = strdup(arcname);
     if (strstr(dirname, ".arc") != NULL) {
         *strrchr(dirname, '.') = '\0';
@@ -161,7 +163,7 @@ void extract_files(const char *arcname) {
 }
 
 void append_files(const char *arcname, int count, char **files) {
-    FILE *arc = open_arc_for_read(arcname);
+    FILE *arc = open_arc(arcname, "rb");
     if (arc == NULL) {
         create_archive(arcname, count, files);
         return;
