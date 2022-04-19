@@ -15,4 +15,4 @@ build: ${OBJS}
 	${CC} ${OBJS} ${LIBS} -o ${OUT}
 
 debug: ${OBJS}
-	${CC} -Wall -g ${SRC} ${LIBS} -o ${OUT}
+	${CC} ${CFLAGS} -Wall -g ${SRC} ${LIBS} -o ${OUT}

@@ -9,6 +9,49 @@
 #include <utility>
 #include "rubik.hpp"
 
+
+std::ostream& operator<<(std::ostream& os, rubik::colors color) {
+    using namespace rubik;
+    static const std::map<rubik::colors, const char *> string_map = {
+        {WHITE, "WHITE"},
+        {BLUE, "BLUE"},
+        {YELLOW, "YELLOW"},
+        {ORANGE, "ORANGE"},
+        {RED, "RED"},
+        {GREEN, "GREEN"}
+    };
+    os << string_map.at(color);
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, rubik::sides side) {
+    using namespace rubik;
+    static const std::map<rubik::sides, const char *> string_map = {
+        {FRONT, "FRONT"},
+        {RIGHT, "RIGHT"},
+        {BACK, "BACK"},
+        {LEFT, "LEFT"},
+        {TOP, "TOP"},
+        {BOTTOM, "BOTTOM"}
+    };
+    os << string_map.at(side);
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, rubik::rubik_cube::miniside s) {
+    os << s.color << " on " << s.side;
+    return os;
+}
+
+template<typename T, std::size_t N>
+std::ostream& operator<<(std::ostream& os, const std::array<T, N>& arr) {
+    os << '[';
+    for (auto it = arr.cbegin(); it != arr.cend() - 1; ++it)
+        os << *it << ", ";
+    os << arr.back() << ']';
+    return os;
+}
+
 namespace rubik {
     std::istream& operator>>(std::istream& is, colors& c) {
         static const std::map<char, colors> to_color{
@@ -51,7 +94,8 @@ namespace rubik {
             return {second, first};
         }
 
-        if (first == LEFT && second == FRONT) {
+        if ((first == LEFT && second == FRONT) ||
+                (first == FRONT && second == LEFT)) {
             return {LEFT, FRONT};
         }
         if (first < second) {
@@ -107,31 +151,14 @@ namespace rubik {
             corner({miniside{RIGHT, _state[RIGHT][2]}, miniside{TOP, _state[TOP][2]}, miniside{BACK, _state[BACK][0]}}),
             corner({miniside{BACK, _state[BACK][2]}, miniside{TOP, _state[TOP][0]}, miniside{LEFT, _state[LEFT][0]}}),
 
-            corner({miniside{LEFT, _state[LEFT][8]}, miniside{BOTTOM, _state[TOP][0]}, miniside{FRONT, _state[FRONT][6]}}),
-            corner({miniside{FRONT, _state[FRONT][8]}, miniside{BOTTOM, _state[TOP][2]}, miniside{RIGHT, _state[RIGHT][6]}}),
-            corner({miniside{RIGHT, _state[RIGHT][8]}, miniside{BOTTOM, _state[TOP][8]}, miniside{BACK, _state[BACK][6]}}),
-            corner({miniside{BACK, _state[BACK][8]}, miniside{BOTTOM, _state[TOP][6]}, miniside{LEFT, _state[LEFT][6]}}),
+            corner({miniside{LEFT, _state[LEFT][8]}, miniside{BOTTOM, _state[BOTTOM][0]}, miniside{FRONT, _state[FRONT][6]}}),
+            corner({miniside{FRONT, _state[FRONT][8]}, miniside{BOTTOM, _state[BOTTOM][2]}, miniside{RIGHT, _state[RIGHT][6]}}),
+            corner({miniside{RIGHT, _state[RIGHT][8]}, miniside{BOTTOM, _state[BOTTOM][8]}, miniside{BACK, _state[BACK][6]}}),
+            corner({miniside{BACK, _state[BACK][8]}, miniside{BOTTOM, _state[BOTTOM][6]}, miniside{LEFT, _state[LEFT][6]}}),
         };
     }
     
-    rubik_cube::rubik_cube() {
-        for (int side = 0; side < 6; side++) {
-            _state[side].fill((colors)side);
-        }
-    }
-    rubik_cube::rubik_cube(const std::string& scramble) {
-
-        std::istringstream stream(scramble);
-
-        if (scramble.length() != 9*6) {
-            throw std::invalid_argument("Scramble string must be 54 characters long");
-        }
-
-        for (auto& side : _state) {
-            for (auto& pos : side) {
-                stream >> pos;
-            }
-        }
+    void rubik_cube::validate() {
 
         auto check_count = [this](std::initializer_list<int> indexes, int desirable_count) {
             std::array<int, 6> colors_count{};
@@ -227,8 +254,7 @@ namespace rubik {
 
         // NOTE: TOP and BOTTOM are always the first
         // Edges
-        for (auto edge : get_edges()) {
-            auto [first, second] = edge.sides;
+        for (auto [first, second] : get_edges()) {
             if (color_side.at(first.color) == opposing_side(color_side.at(second.color)) ||
                     first.color == second.color) {
                 throw std::invalid_argument("Invalid scramble");
@@ -249,7 +275,9 @@ namespace rubik {
                 is_top_bottom_side(color_side.at(second.color))) {
                 auto x_side = is_top_bottom_side(color_side.at(first.color)) ?
                     first : second;
-                if (x_side.side == LEFT || x_side.side == RIGHT) {
+                auto other_side = x_side.side == first.side ? second : first;
+                if ((x_side.side == LEFT || x_side.side == RIGHT) && !is_top_bottom_side(other_side.side) &&
+                                                                     !is_top_bottom_side(x_side.side)) {
                     edge_parity++;
                 }
             }
@@ -257,11 +285,11 @@ namespace rubik {
                 auto z_side = color_side.at(first.color) == FRONT || color_side.at(first.color) == BACK ?
                     first : second;
                 if (!(color_side.at(first.color) == first.side && color_side.at(second.color) == second.side) &&
+                        !(color_side.at(first.color) == opposing_side(first.side) && color_side.at(second.color) == opposing_side(second.side)) &&
                         !is_top_bottom_side(z_side.side)) {
                     edge_parity++;
                 }
             }
-
             // Permutation
             permutation[edge_permutation.at({first.side, second.side}) - 1] = 
                 edge_permutation.at(order_edge(color_side.at(first.color), color_side.at(second.color)));
@@ -271,22 +299,23 @@ namespace rubik {
 
         for (auto corner : get_corners()) {
             // Existance (colors)
-            auto x_side = std::find_if(corner.sides.begin(), corner.sides.end(), 
+            auto x_side = std::find_if(corner.begin(), corner.end(), 
                         [](auto item) { return is_top_bottom_side(color_side.at(item.color)); });
             
-            if (x_side == corner.sides.end()) {
-                throw std::invalid_argument("Invalid scramble");
+            if (x_side == corner.end()) {
+                throw std::invalid_argument("Invalid scramble (X side is not present)");
             }
 
-            auto other = std::find_if(corner.sides.begin(), corner.sides.end(),
+            auto other = std::find_if(corner.begin(), corner.end(),
                     [](auto item) { return !is_top_bottom_side(color_side.at(item.color)); });
 
-            auto and_another = std::find_if(corner.sides.rbegin(), corner.sides.rend(),
+            auto and_another = std::find_if(corner.rbegin(), corner.rend(),
                     [](auto item) { return !is_top_bottom_side(color_side.at(item.color)); });
+
 
             if (opposing_side(color_side.at(other->color)) == color_side.at(and_another->color) ||
                     other->color == and_another->color) {
-                throw std::invalid_argument("Invalid scramble");
+                throw std::invalid_argument("Invalid scramble (Invalid color positions)");
             }
 
             auto& is_present = corner_uniqueness[{
@@ -302,11 +331,21 @@ namespace rubik {
             // Corner parity
             if (!is_top_bottom_side(x_side->side)) {
                 // First side is leftier, second is an X side and third side is rightier
-                if (corner.sides[0].color == x_side->color) {
-                    corner_parity++;
+                if (corner[1].side == TOP) {
+                    if (corner[0].color == x_side->color) {
+                        corner_parity++;
+                    }
+                    else {
+                        corner_parity--;
+                    }
                 }
                 else {
-                    corner_parity--;
+                    if (corner[0].color == x_side->color) {
+                        corner_parity--;
+                    }
+                    else {
+                        corner_parity++;
+                    }
                 }
             }
 
@@ -322,17 +361,6 @@ namespace rubik {
 
         // Count inversions within permutation array, if even count, then valid, otherwise no.
         
-        int inversions = 0;
-
-        for (auto it = permutation.cbegin(); it != permutation.cend() - 1; ++it) {
-            if (*it > *(it + 1)) {
-                inversions++;
-            }
-        }
-        if (inversions % 2 != 0) {
-            throw std::invalid_argument("Permutation parity test failed");
-        }
-
         if (corner_parity % 3 != 0) {
             throw std::invalid_argument("Corner parity test failed");
         }
@@ -341,9 +369,48 @@ namespace rubik {
             throw std::invalid_argument("Edge parity test failed");
         }
 
+        std::cout << permutation << '\n';
+        int inversions = 0;
+
+        for (auto it = permutation.cbegin(); it != permutation.cend() - 1; ++it) {
+            for (auto jt = it + 1; jt != permutation.cend(); ++jt) { 
+                if (*it > *jt) {
+                    inversions++;
+                }
+            }
+        }
+        if (inversions % 2 != 0) {
+            throw std::invalid_argument("Permutation parity test failed");
+        }
+        
+
         // It's done.
+
+    }
+    rubik_cube::rubik_cube() {
+        for (int side = 0; side < 6; side++) {
+            _state[side].fill((colors)side);
+        }
+    }
+    rubik_cube::rubik_cube(const std::string& scramble) {
+
+        std::istringstream stream(scramble);
+
+        if (scramble.length() != 9*6) {
+            throw std::invalid_argument("Scramble string must be 54 characters long");
+        }
+
+        for (auto& side : _state) {
+            for (auto& pos : side) {
+                stream >> pos;
+            }
+        }
+        validate();
     }
 
+    rubik_cube::rubik_cube(const state_array& scramble) : _state(scramble) {
+        validate();
+    }
 
     const state_array& rubik_cube::get_state() const {
         return _state;
