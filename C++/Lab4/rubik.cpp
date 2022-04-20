@@ -416,6 +416,203 @@ namespace rubik {
         return _state;
     }
 
+    // Rotations
+
+    void rubik_cube::rotate_side(sides side, const std::array<int, 9>& rotate_map) {
+        std::array<colors, 9> copy(_state[side]);
+
+        for (int i = 0; i < 9; i++) {
+            _state[side][i] = copy[rotate_map[i]];
+        }
+
+        static const std::array<std::array<int, 3>, 4> edges = {{
+            {0, 1, 2},
+            {2, 5, 8},
+            {6, 7, 8},
+            {0, 3, 6}
+        }};
+
+        using row = std::array<colors, 3>;
+        using prow = std::array<colors*, 3>;
+
+        if (side != TOP && side != BOTTOM) {
+            auto& left_side = _state[((side - 1) % 4 + 4) % 4];
+            prow to_left = {&left_side[2], &left_side[5], &left_side[8]};
+            row from_left = {left_side[2], left_side[5], left_side[8]};
+            
+            auto& right_side = _state[(side + 1) % 4];
+            prow to_right = {&right_side[0], &right_side[3], &right_side[6]};
+            row from_right = {right_side[0], right_side[3], right_side[6]};
+            
+            prow to_top;
+            if (side == RIGHT || side == LEFT) {
+                to_top = {
+                    &_state[TOP][edges.at(side)[0]], 
+                    &_state[TOP][edges.at(side)[1]], 
+                    &_state[TOP][edges.at(side)[2]]
+                };
+            }
+            else {
+                to_top = {
+                    &_state[TOP][edges.at((side + 2) % 4)[0]], 
+                    &_state[TOP][edges.at((side + 2) % 4)[1]], 
+                    &_state[TOP][edges.at((side + 2) % 4)[2]]
+                };
+            }
+            row from_top = {*to_top[0], *to_top[1], *to_top[2]};
+
+            prow to_bottom = {
+                &_state[BOTTOM][edges.at(side)[0]], 
+                &_state[BOTTOM][edges.at(side)[1]], 
+                &_state[BOTTOM][edges.at(side)[2]]
+            };
+            row from_bottom = {*to_bottom[0], *to_bottom[1], *to_bottom[2]};
+
+            // clockwise
+            if (rotate_map[0] == 6) {
+                for (int i = 0; i < 3; i++) {
+                    *to_right[i] = from_top[i];
+                    *to_bottom[i] = from_right[2 - i];
+                    *to_left[i] = from_bottom[i];
+                    *to_top[i] = from_left[2 - i];
+                }
+            }
+            else if (rotate_map[0] == 2) {
+                for (int i = 0; i < 3; i++) {
+                    *to_left[i] = from_top[2 - i];
+                    *to_bottom[i] = from_left[i];
+                    *to_right[i] = from_bottom[2 - i];
+                    *to_top[i] = from_right[i];
+                }
+            }
+            else if (rotate_map[0] == 8) {
+                for (int i = 0; i < 3; i++) {
+                    *to_left[i] = from_right[2 - i];
+                    *to_bottom[i] = from_top[2 - i];
+                    *to_right[i] = from_left[2 - i];
+                    *to_top[i] = from_bottom[2 - i];
+                }
+            }
+            else {
+                throw std::logic_error("Wrong rotate map");
+            }
+        }
+        else {
+            std::array<int, 3> indexes;
+            if (side == TOP)
+                indexes = {0, 1, 2};
+            else 
+                indexes = {6, 7, 8};
+            
+            std::array<row, 4> copy = {{
+                {_state[FRONT][indexes[0]], _state[FRONT][indexes[1]], _state[FRONT][indexes[2]]},
+                {_state[RIGHT][indexes[0]], _state[RIGHT][indexes[1]], _state[RIGHT][indexes[2]]},
+                {_state[BACK][indexes[0]], _state[BACK][indexes[1]], _state[BACK][indexes[2]]},
+                {_state[LEFT][indexes[0]], _state[LEFT][indexes[1]], _state[LEFT][indexes[2]]}
+            }};
+
+            for (int outer_side = 0; outer_side < 4; outer_side++) {
+                int corresponding_side;
+
+                // Rotation depends on side
+                int direction = side == BOTTOM ? 1 : -1;
+
+                // clockwise
+                if (rotate_map[0] == 6 ) {
+                    corresponding_side = ((outer_side + direction) % 4 + 4) % 4;
+                }
+                // counterclockwise
+                else if (rotate_map[0] == 2) {
+                    corresponding_side = ((outer_side - direction) % 4 + 4) % 4;
+                }
+                // twice
+                else {
+                    corresponding_side = (outer_side + 2) % 4;
+                }
+
+                for (int i = 0; i < 3; i++) {
+                    _state[corresponding_side][indexes[i]] = copy[outer_side][i];
+                }
+            }
+        }
+    }
+
+    void rubik_cube::F() {
+        rotate_side(FRONT, rotate_clockwise_map);
+    }
+
+    void rubik_cube::R() {
+        rotate_side(RIGHT, rotate_clockwise_map);
+    }
+
+    void rubik_cube::U() {
+        rotate_side(TOP, rotate_clockwise_map);
+    }
+
+    void rubik_cube::L() {
+        rotate_side(LEFT, rotate_clockwise_map);
+    }
+
+    void rubik_cube::B() {
+        rotate_side(BACK, rotate_clockwise_map);
+    }
+
+    void rubik_cube::D() {
+        rotate_side(BOTTOM, rotate_clockwise_map);
+    }
+    
+
+    void rubik_cube::F2() {
+        rotate_side(FRONT, rotate_twice_map);
+    }
+
+    void rubik_cube::R2() {
+        rotate_side(RIGHT, rotate_twice_map);
+    }
+
+    void rubik_cube::U2() {
+        rotate_side(TOP, rotate_twice_map);
+    }
+
+    void rubik_cube::L2() {
+        rotate_side(LEFT, rotate_twice_map);
+    }
+
+    void rubik_cube::B2() {
+        rotate_side(BACK, rotate_twice_map);
+    }
+
+    void rubik_cube::D2() {
+        rotate_side(BOTTOM, rotate_twice_map);
+    }
+
+
+    void rubik_cube::Fi() {
+        rotate_side(FRONT, rotate_counterclockwise_map);
+    }
+
+    void rubik_cube::Ri() {
+        rotate_side(RIGHT, rotate_counterclockwise_map);
+    }
+
+    void rubik_cube::Ui() {
+        rotate_side(TOP, rotate_counterclockwise_map);
+    }
+
+    void rubik_cube::Li() {
+        rotate_side(LEFT, rotate_counterclockwise_map);
+    }
+
+    void rubik_cube::Bi() {
+        rotate_side(BACK, rotate_counterclockwise_map);
+    }
+
+    void rubik_cube::Di() {
+        rotate_side(BOTTOM, rotate_counterclockwise_map);
+    }
+
+    
+
     cube_printer::cube_printer(const rubik_cube& cube, const std::string& scheme) : _cube(cube.get_state()), _scheme(scheme) {
         using namespace std::literals;
 

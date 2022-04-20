@@ -8,6 +8,7 @@
 #include <ostream>
 #include <array>
 
+
 namespace rubik {
     enum colors {
         RED, ORANGE,
@@ -29,7 +30,35 @@ namespace rubik {
         private:
             state_array _state;
             void validate();
+            // 0 1 2    6 3 0
+            // 3 4 5 -> 7 4 1
+            // 6 7 8    8 5 2
+            static constexpr std::array<int, 9> rotate_clockwise_map = {
+                6, 3, 0, 
+                7, 4, 1,
+                8, 5, 2
+            };
+
+            // 0 1 2    2 5 8
+            // 3 4 5 -> 1 4 7
+            // 6 7 8    0 3 6
+            static constexpr std::array<int, 9> rotate_counterclockwise_map = {
+                2, 5, 8, 
+                1, 4, 7,
+                0, 3, 6
+            };
             
+            // 0 1 2    8 7 6
+            // 3 4 5 -> 5 4 3
+            // 6 7 8    2 1 0
+            static constexpr std::array<int, 9> rotate_twice_map = {
+                8, 7, 6, 
+                5, 4, 3,
+                2, 1, 0
+            };
+
+            void rotate_side(sides, const std::array<int, 9>&);
+
         public:
             struct miniside {
                 sides side;
@@ -106,4 +135,5 @@ namespace rubik {
             void print_blank_row(std::ostream&) const override;
     };
 }
+std::ostream& operator<<(std::ostream&, rubik::sides);
 #endif
