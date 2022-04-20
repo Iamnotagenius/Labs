@@ -139,6 +139,9 @@ void test1() {
 int main() {
     circular_buffer<int> buf = {1, 2, 5, 3, 1};
     PRINT_DEBUG(buf);
+    buf.push_front(7);
+    buf.push_front(9);
+    PRINT_DEBUG(buf);
     std::sort(buf.begin(), buf.end());
     PRINT_DEBUG(buf);
 

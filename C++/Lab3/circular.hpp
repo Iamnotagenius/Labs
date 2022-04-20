@@ -204,13 +204,21 @@ namespace custom_data_structures {
             
             template<bool Is_const>
             class iterator {
-                public:
                 using iterator_category = std::random_access_iterator_tag;
                 using value_type = T;
                 using difference_type = ptrdiff_t;
                 using reference = std::conditional_t<Is_const, const T&, T&>;
                 using pointer = std::conditional_t<Is_const, const T*, T*>;
-                
+
+                private:
+                    size_t actual_index() const { 
+                        return (_start + (_index % _size + _size) % _size) % _capacity; 
+                    }
+                    pointer _data;
+                    difference_type _index;
+                    size_t _capacity, _start, _size;
+
+                public:
                 iterator() : _data(nullptr), _index(0), _capacity(0), _start(0), _size(0) {}
 
                 iterator(pointer data, size_t capacity, size_t start_index, size_t index, size_t size) : 
@@ -316,13 +324,6 @@ namespace custom_data_structures {
                 }
                     
 
-                private:
-                    size_t actual_index() const { 
-                        return (_start + (_index % _size + _size) % _size) % _capacity; 
-                    }
-                    pointer _data;
-                    difference_type _index;
-                    size_t _capacity, _start, _size;
             };
 
             iterator<false> begin() { 
