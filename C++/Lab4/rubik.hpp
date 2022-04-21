@@ -11,9 +11,8 @@
 
 namespace rubik {
     enum colors {
-        RED, ORANGE,
+        GREEN, RED, BLUE, ORANGE,
         WHITE, YELLOW,
-        BLUE, GREEN
     };
     
     enum sides {
@@ -29,7 +28,6 @@ namespace rubik {
     class rubik_cube {
         private:
             state_array _state;
-            void validate();
             // 0 1 2    6 3 0
             // 3 4 5 -> 7 4 1
             // 6 7 8    8 5 2
@@ -65,17 +63,20 @@ namespace rubik {
                 colors color;
             };
             using edge = std::array<miniside, 2>;
-            using corner = std::array<miniside, 3>;            // Constructs solved cube
+            using corner = std::array<miniside, 3>;
 
+            // Constructs solved cube
             rubik_cube();
             // Constructs scrambled cube
             rubik_cube(int times);
-            rubik_cube(const std::string& scramble);
-            rubik_cube(const state_array& scramble);
+            rubik_cube(std::istream&);
+            rubik_cube(std::istream&, const std::map<char, colors>&);
+            rubik_cube(const state_array&);
 
             const state_array& get_state() const;
             std::array<edge, 12> get_edges() const;
             std::array<corner, 8> get_corners() const;
+            void validate();
     
             // turns
     
@@ -108,9 +109,10 @@ namespace rubik {
     class cube_printer {
         private:
             const state_array& _cube;
-            const std::string& _scheme;
+            const std::string_view _scheme;
         public:
-            cube_printer(const rubik_cube&, const std::string&);
+            cube_printer(const rubik_cube&);
+            cube_printer(const rubik_cube&, std::string_view);
             virtual void print_row(std::ostream&, std::span<const colors, 3>) const = 0;
             virtual void print_blank_row(std::ostream&) const = 0;
             friend std::ostream& operator<<(std::ostream&, const cube_printer&);
@@ -118,19 +120,20 @@ namespace rubik {
     };
     class color_printer : public cube_printer {
         private:
-            const std::map<const colors, char> _symbols;
+            const std::map<colors, std::array<int, 3>> _colors;
         public:
-            color_printer(const rubik_cube&, const std::string&);
-            color_printer(const rubik_cube&, const std::string&, const std::map<const colors, char>& symbols);
+            color_printer(const rubik_cube&);
+            color_printer(const rubik_cube&, std::string_view);
+            color_printer(const rubik_cube&, std::string_view, const std::map<colors, std::array<int, 3>>& symbols);
             void print_row(std::ostream&, std::span<const colors, 3>) const override;
             void print_blank_row(std::ostream&) const override;
     };
     class text_printer : public cube_printer {
         private:
-            const std::map<const colors, char> _symbols;
+            const std::map<colors, char> _symbols;
         public:
-            text_printer(const rubik_cube&, const std::string&);
-            text_printer(const rubik_cube&, const std::string&, const std::map<const colors, char>& symbols);
+            using cube_printer::cube_printer;
+            text_printer(const rubik_cube&, std::string_view, const std::map<colors, char>& symbols);
             void print_row(std::ostream&, std::span<const colors, 3>) const override;
             void print_blank_row(std::ostream&) const override;
     };
