@@ -76,35 +76,38 @@ namespace rubik {
             const state_array& get_state() const;
             std::array<edge, 12> get_edges() const;
             std::array<corner, 8> get_corners() const;
+            std::map<colors, sides> get_centers() const;
+            colors get_center(sides) const;
+            edge get_edge(sides, sides) const;
+            corner get_corner(sides, sides, sides) const;
             void validate();
     
             // turns
     
-            void F();
-            void R();
-            void U();
-            void L();
-            void B();
-            void D();
+            rubik_cube& F();
+            rubik_cube& R();
+            rubik_cube& U();
+            rubik_cube& L();
+            rubik_cube& B();
+            rubik_cube& D();
             
-            void F2();
-            void R2();
-            void U2();
-            void L2();
-            void B2();
-            void D2();
+            rubik_cube& F2();
+            rubik_cube& R2();
+            rubik_cube& U2();
+            rubik_cube& L2();
+            rubik_cube& B2();
+            rubik_cube& D2();
         
-            void Fi();
-            void Ri();
-            void Ui();
-            void Li();
-            void Bi();
-            void Di();
-    
-            // Returns solution
-            std::string solve();
+            rubik_cube& Fi();
+            rubik_cube& Ri();
+            rubik_cube& Ui();
+            rubik_cube& Li();
+            rubik_cube& Bi();
+            rubik_cube& Di();
     
     };
+
+    std::string old_pochmann(rubik_cube& cube);
 
     class cube_printer {
         private:

@@ -53,6 +53,16 @@ std::ostream& operator<<(std::ostream& os, const std::array<T, N>& arr) {
     return os;
 }
 
+template<typename K, typename V>
+std::ostream& operator<<(std::ostream& os, const std::map<K, V>& rhs) {
+    os << "{\n";
+    for (auto [key, value] : rhs) {
+        os << "    " << key << ": " << value << "\n";
+    }
+    os << "}\n";
+    return os;
+}
+
 namespace rubik {
     std::istream& operator>>(std::istream& is, colors& c) {
         static const std::map<char, colors> to_color{
@@ -438,6 +448,112 @@ namespace rubik {
         return _state;
     }
 
+    std::map<colors, sides> rubik_cube::get_centers() const {
+        return {
+            {_state[FRONT][4], FRONT},
+            {_state[TOP][4], TOP},
+            {_state[BOTTOM][4], BOTTOM},
+            {_state[BACK][4], BACK},
+            {_state[LEFT][4], LEFT},
+            {_state[RIGHT][4], RIGHT},
+        };
+    }
+
+    colors rubik_cube::get_center(sides side) const {
+        return _state[side][4];
+    }
+
+    rubik_cube::edge rubik_cube::get_edge(sides first, sides second) const {
+        if (first == opposing_side(second)) {
+            throw std::invalid_argument("Sides must be adjacent");
+        }
+        static constexpr std::array<int, 4> bottom_indexes = {1, 5, 7, 3};
+        static constexpr std::array<int, 4> top_indexes = {7, 5, 1, 3};
+        
+        if (first == BOTTOM) {
+            return {rubik_cube::miniside{BOTTOM, _state[BOTTOM][bottom_indexes[second]]}, 
+                rubik_cube::miniside{second, _state[second][7]}};
+        }
+        else if (second == BOTTOM) {
+            return {rubik_cube::miniside{first, _state[first][7]},
+                rubik_cube::miniside{BOTTOM, _state[BOTTOM][bottom_indexes[first]]}};
+        }
+        else if (first == TOP) {
+            return {rubik_cube::miniside{TOP, _state[TOP][top_indexes[second]]}, 
+                rubik_cube::miniside{second, _state[second][1]}};
+        }
+        else if (second == TOP) {
+            return {rubik_cube::miniside{first, _state[first][1]},
+                rubik_cube::miniside{TOP, _state[TOP][top_indexes[first]]}};
+        }
+        else if ((first + 1) % 4 == second) {
+            return {miniside{first, _state[first][5]}, miniside{second, _state[second][3]}};
+        }
+
+        return {miniside{first, _state[first][3]}, miniside{second, _state[second][5]}};
+
+    }
+
+    rubik_cube::corner rubik_cube::get_corner(sides first, sides second, sides third) const {
+        if (first == opposing_side(second) || first == opposing_side(third) || second == opposing_side(third)) {
+            throw std::invalid_argument("Sides must be adjacent");
+        }
+
+        static const std::map<std::array<sides, 2>, int> top_indexes = {
+            {{FRONT, RIGHT}, 8},
+            {{RIGHT, BACK}, 2},
+            {{BACK, LEFT}, 0},
+            {{FRONT, LEFT}, 6}
+        };
+        static const std::map<std::array<sides, 2>, int> bottom_indexes = {
+            {{FRONT, RIGHT}, 2},
+            {{RIGHT, BACK}, 8},
+            {{BACK, LEFT}, 6},
+            {{FRONT, LEFT}, 0}
+        };
+
+        int x_side, left_side = -1, right_side = -1;
+        std::array<sides, 3> in_order = {first, second, third};
+        for (int i = 0; i < 3; i++) {
+            if (in_order[i] == TOP || in_order[i] == BOTTOM) {
+                x_side = i;
+            }
+            else {
+                if (left_side != -1) {
+                    right_side = i;
+                }
+                else {
+                    left_side = i;
+                }
+            }
+        }
+        if (!(in_order[left_side] < in_order[right_side] || (in_order[left_side] == LEFT && in_order[right_side] == FRONT))) {
+            std::swap(left_side, right_side);
+        }
+
+        corner res;
+        
+        for (int i = 0; i < 3; i++) {
+            if (i == x_side) {
+                auto& idx_map = x_side == TOP ? top_indexes : bottom_indexes;
+                res[i] = miniside{in_order[i], 
+                    _state[x_side][idx_map.at({std::min(in_order[(i + 1) % 3], in_order[(i + 2) % 3]), 
+                                               std::max(in_order[(i + 1) % 3], in_order[(i + 2) % 3])})]};
+            }
+            else if (i == left_side) {
+                res[i] = miniside{in_order[i], _state[in_order[i]][in_order[x_side] == TOP ? 2 : 8]};
+            }
+            else if (i == right_side) {
+                res[i] = miniside{in_order[i], _state[in_order[i]][in_order[x_side] == TOP ? 0 : 6]};
+            }
+            else {
+                throw std::logic_error("Some of the indexes were not initialized");
+            }
+        }
+
+        return res;
+    }
+
     // Rotations
 
     void rubik_cube::rotate_side(sides side, const std::array<int, 9>& rotate_map) {
@@ -559,79 +675,251 @@ namespace rubik {
         }
     }
 
-    void rubik_cube::F() {
+    rubik_cube& rubik_cube::F() {
         rotate_side(FRONT, rotate_clockwise_map);
+        return *this;
     }
 
-    void rubik_cube::R() {
+    rubik_cube& rubik_cube::R() {
         rotate_side(RIGHT, rotate_clockwise_map);
+        return *this;
     }
 
-    void rubik_cube::U() {
+    rubik_cube& rubik_cube::U() {
         rotate_side(TOP, rotate_clockwise_map);
+        return *this;
     }
 
-    void rubik_cube::L() {
+    rubik_cube& rubik_cube::L() {
         rotate_side(LEFT, rotate_clockwise_map);
+        return *this;
     }
 
-    void rubik_cube::B() {
+    rubik_cube& rubik_cube::B() {
         rotate_side(BACK, rotate_clockwise_map);
+        return *this;
     }
 
-    void rubik_cube::D() {
+    rubik_cube& rubik_cube::D() {
         rotate_side(BOTTOM, rotate_clockwise_map);
+        return *this;
     }
 
-
-    void rubik_cube::F2() {
+    rubik_cube& rubik_cube::F2() {
         rotate_side(FRONT, rotate_twice_map);
+        return *this;
     }
 
-    void rubik_cube::R2() {
+    rubik_cube& rubik_cube::R2() {
         rotate_side(RIGHT, rotate_twice_map);
+        return *this;
     }
 
-    void rubik_cube::U2() {
+    rubik_cube& rubik_cube::U2() {
         rotate_side(TOP, rotate_twice_map);
+        return *this;
     }
 
-    void rubik_cube::L2() {
+    rubik_cube& rubik_cube::L2() {
         rotate_side(LEFT, rotate_twice_map);
+        return *this;
     }
 
-    void rubik_cube::B2() {
+    rubik_cube& rubik_cube::B2() {
         rotate_side(BACK, rotate_twice_map);
+        return *this;
     }
 
-    void rubik_cube::D2() {
+    rubik_cube& rubik_cube::D2() {
         rotate_side(BOTTOM, rotate_twice_map);
+        return *this;
     }
 
-
-    void rubik_cube::Fi() {
+    rubik_cube& rubik_cube::Fi() {
         rotate_side(FRONT, rotate_counterclockwise_map);
+        return *this;
     }
 
-    void rubik_cube::Ri() {
+    rubik_cube& rubik_cube::Ri() {
         rotate_side(RIGHT, rotate_counterclockwise_map);
+        return *this;
     }
 
-    void rubik_cube::Ui() {
+    rubik_cube& rubik_cube::Ui() {
         rotate_side(TOP, rotate_counterclockwise_map);
+        return *this;
     }
 
-    void rubik_cube::Li() {
+    rubik_cube& rubik_cube::Li() {
         rotate_side(LEFT, rotate_counterclockwise_map);
+        return *this;
     }
 
-    void rubik_cube::Bi() {
+    rubik_cube& rubik_cube::Bi() {
         rotate_side(BACK, rotate_counterclockwise_map);
+        return *this;
     }
 
-    void rubik_cube::Di() {
+    rubik_cube& rubik_cube::Di() {
         rotate_side(BOTTOM, rotate_counterclockwise_map);
+        return *this;
     }
+
+    bool is_same_edges(rubik_cube::edge lhs, rubik_cube::edge rhs) {
+        return (lhs[0].color == rhs[0].color && lhs[1].color == rhs[1].color) ||
+               (lhs[0].color == rhs[1].color && lhs[1].color == rhs[0].color);
+    }
+
+
+    std::string old_pochmann(rubik_cube& cube) {
+        
+        auto color_sides = cube.get_centers();
+
+        /*
+         * Memorization
+         *
+         *
+         *       | A A B |
+         *       | D   B |
+         *       | D C C |
+         *
+         * E E F | I I J | M M N | Q Q R
+         * H   F | L   J | P   N | T   R
+         * H G G | L K K | P O O | T S S
+         *
+         *       | U U V |
+         *       | X   V |
+         *       | X W W |
+        */
+
+        const std::map<std::array<colors, 2>, char> edge_letters = {
+            {{cube.get_center(TOP),     cube.get_center(BACK)},     'A'},
+            {{cube.get_center(TOP),     cube.get_center(RIGHT)},    'B'},
+            {{cube.get_center(TOP),     cube.get_center(FRONT)},    'C'},
+            {{cube.get_center(TOP),     cube.get_center(LEFT)},     'D'},
+            {{cube.get_center(LEFT),    cube.get_center(TOP)},      'E'},
+            {{cube.get_center(LEFT),    cube.get_center(FRONT)},    'F'},
+            {{cube.get_center(LEFT),    cube.get_center(BOTTOM)},   'G'},
+            {{cube.get_center(LEFT),    cube.get_center(BACK)},     'H'},
+            {{cube.get_center(FRONT),   cube.get_center(TOP)},      'I'},
+            {{cube.get_center(FRONT),   cube.get_center(RIGHT)},    'J'},
+            {{cube.get_center(FRONT),   cube.get_center(BOTTOM)},   'K'},
+            {{cube.get_center(FRONT),   cube.get_center(LEFT)},     'L'},
+            {{cube.get_center(RIGHT),   cube.get_center(TOP)},      'M'},
+            {{cube.get_center(RIGHT),   cube.get_center(BACK)},     'N'},
+            {{cube.get_center(RIGHT),   cube.get_center(BOTTOM)},   'O'},
+            {{cube.get_center(RIGHT),   cube.get_center(FRONT)},    'P'},
+            {{cube.get_center(BACK),    cube.get_center(TOP)},      'Q'},
+            {{cube.get_center(BACK),    cube.get_center(LEFT)},     'R'},
+            {{cube.get_center(BACK),    cube.get_center(BOTTOM)},   'S'},
+            {{cube.get_center(BACK),    cube.get_center(RIGHT)},    'T'},
+            {{cube.get_center(BOTTOM),  cube.get_center(FRONT)},    'U'},
+            {{cube.get_center(BOTTOM),  cube.get_center(RIGHT)},    'V'},
+            {{cube.get_center(BOTTOM),  cube.get_center(BACK)},     'W'},
+            {{cube.get_center(BOTTOM),  cube.get_center(LEFT)},     'X'},
+        };
+
+        const std::map<char, rubik_cube::edge> letters_to_edge = {
+            {'A', cube.get_edge(TOP, BACK)},
+            {'B', cube.get_edge(TOP, RIGHT)},
+            {'C', cube.get_edge(TOP, FRONT)},
+            {'D', cube.get_edge(TOP, LEFT)},
+            {'E', cube.get_edge(LEFT, TOP)},
+            {'F', cube.get_edge(LEFT, FRONT)},
+            {'G', cube.get_edge(LEFT, BOTTOM)},
+            {'H', cube.get_edge(LEFT, BACK)},
+            {'I', cube.get_edge(FRONT, TOP)},
+            {'J', cube.get_edge(FRONT, RIGHT)},
+            {'K', cube.get_edge(FRONT, BOTTOM)},
+            {'L', cube.get_edge(FRONT, LEFT)},
+            {'M', cube.get_edge(RIGHT, TOP)},
+            {'N', cube.get_edge(RIGHT, BACK)},
+            {'O', cube.get_edge(RIGHT, BOTTOM)},
+            {'P', cube.get_edge(RIGHT, FRONT)},
+            {'Q', cube.get_edge(BACK, TOP)},
+            {'R', cube.get_edge(BACK, LEFT)},
+            {'S', cube.get_edge(BACK, BOTTOM)},
+            {'T', cube.get_edge(BACK, RIGHT)},
+            {'U', cube.get_edge(BOTTOM, FRONT)},
+            {'V', cube.get_edge(BOTTOM, RIGHT)},
+            {'W', cube.get_edge(BOTTOM, BACK)},
+            {'X', cube.get_edge(BOTTOM, LEFT)},
+        };
+        std::string edges_mem;
+
+        // When order does not matter
+        auto sorted_edge_colors = [](rubik_cube::edge e) -> std::array<colors, 2> {
+            return {std::min(e[0].color, e[1].color),
+                    std::max(e[0].color, e[1].color)};
+        };
+
+        // When order does matter
+        auto ordered_edge_colors = [](rubik_cube::edge e) -> std::array<colors, 2> {
+            return {e[0].color, e[1].color};
+        };
+        
+        // Buffer is UR edge
+        auto is_buffer = [&cube](std::array<colors, 2> c) {
+            return std::find(c.begin(),
+                             c.end(), 
+                             cube.get_center(TOP)) != c.end() && 
+                   std::find(c.begin(),
+                             c.end(), 
+                             cube.get_center(RIGHT)) != c.end();
+        };
+        rubik_cube::edge current = cube.get_edge(TOP, RIGHT);
+        rubik_cube::edge first(current);
+        std::map<std::array<colors, 2>, bool> solved_edges;
+        for (auto edge : cube.get_edges()) {
+            solved_edges.insert({sorted_edge_colors(edge), 
+                    edge[0].color == cube.get_center(edge[0].side) &&
+                    edge[1].color == cube.get_center(edge[1].side)
+                });
+        }
+
+        do {
+            // Using maps, locate new edges and memorize desired locations
+            do {
+                auto letter = edge_letters.at(ordered_edge_colors(current));
+                solved_edges[sorted_edge_colors(current)] = true;
+                // No memorization for buffer edge
+                if (is_buffer(sorted_edge_colors(current))) {
+                        break;
+                }
+                edges_mem.push_back(letter);
+                current = letters_to_edge.at(letter);
+    
+            } while (!is_same_edges(current, first));
+
+            if (!is_buffer(sorted_edge_colors(current))) {
+                auto letter = edge_letters.at(ordered_edge_colors(current));
+                edges_mem.push_back(letter);
+            }
+
+            // Find next cycle, if exists
+            for (auto edge : cube.get_edges()) {
+                if (!solved_edges[sorted_edge_colors(edge)]) {
+                    current = edge;
+                    first = edge;
+                    break;
+                }
+            }
+
+        } while (std::any_of(solved_edges.begin(), 
+                             solved_edges.end(), 
+                             [](auto kv) { return !std::get<1>(kv); }));
+    
+
+        std::cout << edges_mem << '\n';
+
+
+
+        std::string moves;
+
+        return moves;
+    }
+
+
 
     cube_printer::cube_printer(const rubik_cube& cube) :
         _cube(cube.get_state()), _scheme(" U\nLFRB\n D") {}

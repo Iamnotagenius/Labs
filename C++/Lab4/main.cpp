@@ -7,18 +7,13 @@
 using std::cout;
 using namespace rubik;
 int main() {
-    rubik_cube cube(33);
+    rubik_cube cube;
 
-    std::array<std::array<std::function<void(rubik_cube&)>, 3>, 6> rotations = {{
-        {&rubik_cube::F, &rubik_cube::Fi, &rubik_cube::F2},
-        {&rubik_cube::R, &rubik_cube::Ri, &rubik_cube::R2},
-        {&rubik_cube::B, &rubik_cube::Bi, &rubik_cube::B2},
-        {&rubik_cube::L, &rubik_cube::Li, &rubik_cube::L2},
-        {&rubik_cube::U, &rubik_cube::Ui, &rubik_cube::U2},
-        {&rubik_cube::D, &rubik_cube::Di, &rubik_cube::D2},
-    }};
-    
+    cube.R().U().Ri().Ui().L().Ri().F().R().Fi().Li();
+    //cube.L2().R2().D().L2().R2().U2().L2().R2().D().L2().R2();
+    //cube.U2().B2().L2().Di().F2().L2().B2().Ui().R().Ui().F().U().F2().R().F().Ui().Fi();
     cout << color_printer(cube);
+    old_pochmann(cube);
 
     return 0;
 }
