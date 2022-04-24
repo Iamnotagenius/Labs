@@ -527,7 +527,8 @@ namespace rubik {
                 }
             }
         }
-        if (!(in_order[left_side] < in_order[right_side] || (in_order[left_side] == LEFT && in_order[right_side] == FRONT))) {
+
+        if (in_order[left_side] >= in_order[right_side] || (in_order[left_side] == FRONT && in_order[right_side] == LEFT)) {
             std::swap(left_side, right_side);
         }
 
@@ -535,9 +536,9 @@ namespace rubik {
         
         for (int i = 0; i < 3; i++) {
             if (i == x_side) {
-                auto& idx_map = x_side == TOP ? top_indexes : bottom_indexes;
+                auto& idx_map = in_order[i] == TOP ? top_indexes : bottom_indexes;
                 res[i] = miniside{in_order[i], 
-                    _state[x_side][idx_map.at({std::min(in_order[(i + 1) % 3], in_order[(i + 2) % 3]), 
+                    _state[in_order[i]][idx_map.at({std::min(in_order[(i + 1) % 3], in_order[(i + 2) % 3]), 
                                                std::max(in_order[(i + 1) % 3], in_order[(i + 2) % 3])})]};
             }
             else if (i == left_side) {
@@ -765,12 +766,6 @@ namespace rubik {
         return *this;
     }
 
-    bool is_same_edges(rubik_cube::edge lhs, rubik_cube::edge rhs) {
-        return (lhs[0].color == rhs[0].color && lhs[1].color == rhs[1].color) ||
-               (lhs[0].color == rhs[1].color && lhs[1].color == rhs[0].color);
-    }
-
-
     std::string old_pochmann(rubik_cube& cube) {
         
         auto color_sides = cube.get_centers();
@@ -867,6 +862,12 @@ namespace rubik {
                              c.end(), 
                              cube.get_center(RIGHT)) != c.end();
         };
+
+        auto is_same_edges = [&sorted_edge_colors](rubik_cube::edge first, rubik_cube::edge second) {
+            return sorted_edge_colors(first) == sorted_edge_colors(second);
+        };
+
+        int edges_solved = 0;
         rubik_cube::edge current = cube.get_edge(TOP, RIGHT);
         rubik_cube::edge first(current);
         std::map<std::array<colors, 2>, bool> solved_edges;
@@ -887,6 +888,7 @@ namespace rubik {
                         break;
                 }
                 edges_mem.push_back(letter);
+                edges_solved++;
                 current = letters_to_edge.at(letter);
     
             } while (!is_same_edges(current, first));
@@ -894,6 +896,7 @@ namespace rubik {
             if (!is_buffer(sorted_edge_colors(current))) {
                 auto letter = edge_letters.at(ordered_edge_colors(current));
                 edges_mem.push_back(letter);
+                edges_solved++;
             }
 
             // Find next cycle, if exists
@@ -912,7 +915,154 @@ namespace rubik {
 
         std::cout << edges_mem << '\n';
 
+        // Parity algorithm
+        if (edges_solved % 2 != 0) {
+            cube.R().Ui().Ri().Ui().R().U().R().D().Ri().Ui().R().Di().Ri().U2().Ri().Ui();
+        }
+        
+        // Corners
 
+        const std::map<std::array<colors, 3>, char> corner_letters = {
+            {{cube.get_center(TOP),     cube.get_center(BACK),      cube.get_center(LEFT)},     'A'},
+            {{cube.get_center(TOP),     cube.get_center(RIGHT),     cube.get_center(BACK)},     'B'},
+            {{cube.get_center(TOP),     cube.get_center(FRONT),     cube.get_center(RIGHT)},    'C'},
+            {{cube.get_center(TOP),     cube.get_center(LEFT),      cube.get_center(FRONT)},    'D'},
+            {{cube.get_center(LEFT),    cube.get_center(TOP),       cube.get_center(BACK)},     'E'},
+            {{cube.get_center(LEFT),    cube.get_center(TOP),       cube.get_center(FRONT)},    'F'},
+            {{cube.get_center(LEFT),    cube.get_center(BOTTOM),    cube.get_center(FRONT)},    'G'},
+            {{cube.get_center(LEFT),    cube.get_center(BOTTOM),    cube.get_center(BACK)},     'H'},
+            {{cube.get_center(FRONT),   cube.get_center(TOP),       cube.get_center(LEFT)},     'I'},
+            {{cube.get_center(FRONT),   cube.get_center(TOP),       cube.get_center(RIGHT)},    'J'},
+            {{cube.get_center(FRONT),   cube.get_center(BOTTOM),    cube.get_center(RIGHT)},    'K'},
+            {{cube.get_center(FRONT),   cube.get_center(BOTTOM),    cube.get_center(LEFT)},     'L'},
+            {{cube.get_center(RIGHT),   cube.get_center(TOP),       cube.get_center(FRONT)},    'M'},
+            {{cube.get_center(RIGHT),   cube.get_center(TOP),       cube.get_center(BACK)},     'N'},
+            {{cube.get_center(RIGHT),   cube.get_center(BOTTOM),    cube.get_center(BACK)},     'O'},
+            {{cube.get_center(RIGHT),   cube.get_center(BOTTOM),    cube.get_center(FRONT)},    'P'},
+            {{cube.get_center(BACK),    cube.get_center(TOP),       cube.get_center(RIGHT)},    'Q'},
+            {{cube.get_center(BACK),    cube.get_center(TOP),       cube.get_center(LEFT)},     'R'},
+            {{cube.get_center(BACK),    cube.get_center(BOTTOM),    cube.get_center(LEFT)},     'S'},
+            {{cube.get_center(BACK),    cube.get_center(BOTTOM),    cube.get_center(RIGHT)},    'T'},
+            {{cube.get_center(BOTTOM),  cube.get_center(LEFT),      cube.get_center(FRONT)},    'U'},
+            {{cube.get_center(BOTTOM),  cube.get_center(FRONT),     cube.get_center(RIGHT)},    'V'},
+            {{cube.get_center(BOTTOM),  cube.get_center(RIGHT),     cube.get_center(BACK)},     'W'},
+            {{cube.get_center(BOTTOM),  cube.get_center(BACK),      cube.get_center(LEFT)},     'X'},
+        };
+
+        const std::map<char, rubik_cube::corner> letters_to_corner = {
+            {'A', cube.get_corner(TOP, BACK, LEFT)},
+            {'B', cube.get_corner(TOP, RIGHT, BACK)},
+            {'C', cube.get_corner(TOP, FRONT, RIGHT)},
+            {'D', cube.get_corner(TOP, LEFT, FRONT)},
+            {'E', cube.get_corner(LEFT, TOP, BACK)},
+            {'F', cube.get_corner(LEFT, TOP, FRONT)},
+            {'G', cube.get_corner(LEFT, BOTTOM, FRONT)},
+            {'H', cube.get_corner(LEFT, BOTTOM, BACK)},
+            {'I', cube.get_corner(FRONT, TOP, LEFT)},
+            {'J', cube.get_corner(FRONT, TOP, RIGHT)},
+            {'K', cube.get_corner(FRONT, BOTTOM, RIGHT)},
+            {'L', cube.get_corner(FRONT, BOTTOM, LEFT)},
+            {'M', cube.get_corner(RIGHT, TOP, FRONT)},
+            {'N', cube.get_corner(RIGHT, TOP, BACK)},
+            {'O', cube.get_corner(RIGHT, BOTTOM, BACK)},
+            {'P', cube.get_corner(RIGHT, BOTTOM, FRONT)},
+            {'Q', cube.get_corner(BACK, TOP, RIGHT)},
+            {'R', cube.get_corner(BACK, TOP, LEFT)},
+            {'S', cube.get_corner(BACK, BOTTOM, LEFT)},
+            {'T', cube.get_corner(BACK, BOTTOM, RIGHT)},
+            {'U', cube.get_corner(BOTTOM, LEFT, FRONT)},
+            {'V', cube.get_corner(BOTTOM, FRONT, RIGHT)},
+            {'W', cube.get_corner(BOTTOM, RIGHT, BACK)},
+            {'X', cube.get_corner(BOTTOM, BACK, LEFT)},
+        };
+        
+        // When order does not matter
+        auto sorted_corner_colors = [](rubik_cube::corner c) -> std::array<colors, 3> {
+            std::array<colors, 3> res = {c[0].color, c[1].color, c[2].color};
+            std::sort(res.begin(), res.end());
+            return res;
+        };
+
+        // When order does matter
+        auto ordered_corner_colors = [](rubik_cube::corner c) -> std::array<colors, 3> {
+            return {c[0].color, c[1].color, c[2].color};
+        };
+
+        // LBU corner is the buffer
+        auto is_corner_buffer = [&cube](std::array<colors, 3> c) {
+            return std::find(c.begin(),
+                             c.end(), 
+                             cube.get_center(TOP)) != c.end() && 
+                   std::find(c.begin(),
+                             c.end(), 
+                             cube.get_center(LEFT)) != c.end() &&
+                   std::find(c.begin(),
+                             c.end(), 
+                             cube.get_center(BACK)) != c.end();
+        };
+
+        auto is_same_corners = [&sorted_corner_colors](rubik_cube::corner first, rubik_cube::corner second) {
+            return sorted_corner_colors(first) == sorted_corner_colors(second);
+        };
+
+        std::string corners_mem;
+
+        rubik_cube::corner current_corner = cube.get_corner(LEFT, TOP, BACK);
+        rubik_cube::corner first_corner(current_corner);
+        std::map<std::array<colors, 3>, bool> solved_corners;
+        for (auto corner : cube.get_corners()) {
+            solved_corners.insert({sorted_corner_colors(corner), 
+                    corner[0].color == cube.get_center(corner[0].side) &&
+                    corner[1].color == cube.get_center(corner[1].side) &&
+                    corner[2].color == cube.get_center(corner[2].side)
+                });
+        }
+
+        do {
+            // Using maps, locate new corners and memorize desired locations
+            do {
+                char letter;
+                if (corner_letters.contains(ordered_corner_colors(current_corner))) {
+                    letter = corner_letters.at(ordered_corner_colors(current_corner));
+                }
+                else {
+                    letter = corner_letters.at({current_corner[0].color, current_corner[2].color, current_corner[1].color});
+                }
+                solved_corners[sorted_corner_colors(current_corner)] = true;
+                // No memorization for buffer corner
+                if (is_corner_buffer(sorted_corner_colors(current_corner))) {
+                        break;
+                }
+                corners_mem.push_back(letter);
+                current_corner = letters_to_corner.at(letter);
+    
+            } while (!is_same_corners(current_corner, first_corner));
+
+            if (!is_corner_buffer(sorted_corner_colors(current_corner))) {
+                char letter;
+                if (corner_letters.contains(ordered_corner_colors(current_corner))) {
+                    letter = corner_letters.at(ordered_corner_colors(current_corner));
+                }
+                else {
+                    letter = corner_letters.at({current_corner[0].color, current_corner[2].color, current_corner[1].color});
+                }
+                corners_mem.push_back(letter);
+            }
+
+            // Find next cycle, if exists
+            for (auto corner : cube.get_corners()) {
+                if (!solved_corners[sorted_corner_colors(corner)]) {
+                    current_corner = corner;
+                    first_corner = corner;
+                    break;
+                }
+            }
+
+        } while (std::any_of(solved_corners.begin(), 
+                             solved_corners.end(), 
+                             [](auto kv) { return !std::get<1>(kv); }));
+
+        std::cout << corners_mem << "\n";
 
         std::string moves;
 
