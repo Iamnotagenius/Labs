@@ -56,6 +56,7 @@ namespace rubik {
             };
 
             void rotate_side(sides, const std::array<int, 9>&);
+            void rotate_axis(const std::array<sides, 6>&);
 
         public:
             struct miniside {
@@ -104,7 +105,26 @@ namespace rubik {
             rubik_cube& Li();
             rubik_cube& Bi();
             rubik_cube& Di();
+
+            rubik_cube& X();
+            rubik_cube& Y();
+            rubik_cube& Z();
+
+            rubik_cube& Xi();
+            rubik_cube& Yi();
+            rubik_cube& Zi();
+
+            rubik_cube& M();
+            rubik_cube& E();
+            rubik_cube& S();
+
+            rubik_cube& Mi();
+            rubik_cube& Ei();
+            rubik_cube& Si();
     
+            rubik_cube& M2();
+            rubik_cube& E2();
+            rubik_cube& S2();
     };
 
     std::string old_pochmann(rubik_cube& cube);

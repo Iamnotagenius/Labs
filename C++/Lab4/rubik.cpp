@@ -766,6 +766,115 @@ namespace rubik {
         return *this;
     }
 
+    void rubik_cube::rotate_axis(const std::array<sides, 6>& rotated) {
+        const std::array<std::array<colors, 9>, 6> copy = {
+            _state[rotated[0]],
+            _state[rotated[1]],
+            _state[rotated[2]],
+            _state[rotated[3]],
+            _state[rotated[4]],
+            _state[rotated[5]]
+        };
+        for (int i = 0; i < 4; ++i) {
+            _state[rotated[(i + 1) % 4]] = copy[i];
+        }
+        for (int i = 0; i < 9; ++i) {
+            _state[rotated[4]][i] = copy[4][rotate_clockwise_map[i]];
+            _state[rotated[5]][i] = copy[5][rotate_counterclockwise_map[i]];
+        }
+    }
+
+
+    rubik_cube& rubik_cube::X() {
+        rotate_axis({FRONT, TOP, BACK, BOTTOM, RIGHT, LEFT});
+        auto copy_back = _state[BACK];
+        auto copy_bottom = _state[BOTTOM];
+        for (int i = 0; i < 9; ++i) {
+            _state[BACK][i] = copy_back[rotate_twice_map[i]];
+            _state[BOTTOM][i] = copy_bottom[rotate_twice_map[i]];
+        }
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::Y() {
+        rotate_axis({FRONT, LEFT, BACK, RIGHT, TOP, BOTTOM});
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::Z() {
+        rotate_axis({LEFT, TOP, RIGHT, BOTTOM, FRONT, BACK});
+        for (auto side : {LEFT, TOP, RIGHT, BOTTOM}) {
+            auto copy = _state[side];
+            for (int i = 0; i < 9; ++i) {
+                _state[side][i] = copy[rotate_clockwise_map[i]];
+            }
+        }
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::Xi() {
+        rotate_axis({FRONT, BOTTOM, BACK, TOP, LEFT, RIGHT});
+        auto copy_back = _state[BACK];
+        auto copy_top = _state[TOP];
+        for (int i = 0; i < 9; ++i) {
+            _state[BACK][i] = copy_back[rotate_twice_map[i]];
+            _state[TOP][i] = copy_top[rotate_twice_map[i]];
+        }
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::Yi() {
+        rotate_axis({FRONT, RIGHT, BACK, LEFT, BOTTOM, TOP});
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::Zi() {
+        rotate_axis({LEFT, BOTTOM, RIGHT, TOP, BACK, FRONT});
+        for (auto side : {LEFT, TOP, RIGHT, BOTTOM}) {
+            auto copy = _state[side];
+            for (int i = 0; i < 9; ++i) {
+                _state[side][i] = copy[rotate_counterclockwise_map[i]];
+            }
+        }
+        return *this;
+    }
+
+    rubik_cube& rubik_cube::M() {
+        return Li().R().Xi();
+    }
+
+    rubik_cube& rubik_cube::E() {
+        return Di().U().Yi();
+    }
+
+    rubik_cube& rubik_cube::S() {
+        return Fi().B().Z();
+    }
+
+    rubik_cube& rubik_cube::Mi() {
+        return L().Ri().X();
+    }
+
+    rubik_cube& rubik_cube::Ei() {
+        return D().Ui().Y();
+    }
+
+    rubik_cube& rubik_cube::Si() {
+        return F().Bi().Zi();
+    }
+
+    rubik_cube& rubik_cube::M2() {
+        return M().M();
+    }
+
+    rubik_cube& rubik_cube::E2() {
+        return E().E();
+    }
+
+    rubik_cube& rubik_cube::S2() {
+        return S().S();
+    }
+
     std::string old_pochmann(rubik_cube& cube) {
         
         auto color_sides = cube.get_centers();
@@ -786,6 +895,8 @@ namespace rubik {
          *       | X   V |
          *       | X W W |
         */
+
+        
 
         const std::map<std::array<colors, 2>, char> edge_letters = {
             {{cube.get_center(TOP),     cube.get_center(BACK)},     'A'},
