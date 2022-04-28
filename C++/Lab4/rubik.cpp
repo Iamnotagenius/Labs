@@ -8,8 +8,8 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <regex>
 #include "rubik.hpp"
-
 
 std::ostream& operator<<(std::ostream& os, rubik::colors color) {
     using namespace rubik;
@@ -36,30 +36,6 @@ std::ostream& operator<<(std::ostream& os, rubik::sides side) {
         {BOTTOM, "BOTTOM"}
     };
     os << string_map.at(side);
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, rubik::rubik_cube::miniside s) {
-    os << s.color << " on " << s.side;
-    return os;
-}
-
-template<typename T, std::size_t N>
-std::ostream& operator<<(std::ostream& os, const std::array<T, N>& arr) {
-    os << '[';
-    for (auto it = arr.cbegin(); it != arr.cend() - 1; ++it)
-        os << *it << ", ";
-    os << arr.back() << ']';
-    return os;
-}
-
-template<typename K, typename V>
-std::ostream& operator<<(std::ostream& os, const std::map<K, V>& rhs) {
-    os << "{\n";
-    for (auto [key, value] : rhs) {
-        os << "    " << key << ": " << value << "\n";
-    }
-    os << "}\n";
     return os;
 }
 
@@ -444,6 +420,25 @@ namespace rubik {
         }
     }
 
+    std::size_t rubik_cube::add_listener(std::function<void (std::string_view)> listener) {
+        std::size_t id = 0;
+        while (_listeners.contains(id)) {
+                ++id;
+        }
+        _listeners.emplace(id, std::move(listener));
+        return id;
+    }
+
+    void rubik_cube::remove_listener(std::size_t id) {
+        _listeners.erase(id);
+    }
+
+    void rubik_cube::call_listeners(std::string_view str) {
+        for (auto [id, callback] : _listeners) {
+            callback(str);
+        }
+    }
+
     const state_array& rubik_cube::get_state() const {
         return _state;
     }
@@ -469,9 +464,9 @@ namespace rubik {
         }
         static constexpr std::array<int, 4> bottom_indexes = {1, 5, 7, 3};
         static constexpr std::array<int, 4> top_indexes = {7, 5, 1, 3};
-        
+
         if (first == BOTTOM) {
-            return {rubik_cube::miniside{BOTTOM, _state[BOTTOM][bottom_indexes[second]]}, 
+            return {rubik_cube::miniside{BOTTOM, _state[BOTTOM][bottom_indexes[second]]},
                 rubik_cube::miniside{second, _state[second][7]}};
         }
         else if (second == BOTTOM) {
@@ -479,7 +474,7 @@ namespace rubik {
                 rubik_cube::miniside{BOTTOM, _state[BOTTOM][bottom_indexes[first]]}};
         }
         else if (first == TOP) {
-            return {rubik_cube::miniside{TOP, _state[TOP][top_indexes[second]]}, 
+            return {rubik_cube::miniside{TOP, _state[TOP][top_indexes[second]]},
                 rubik_cube::miniside{second, _state[second][1]}};
         }
         else if (second == TOP) {
@@ -528,30 +523,35 @@ namespace rubik {
             }
         }
 
-        if (in_order[left_side] >= in_order[right_side] || (in_order[left_side] == FRONT && in_order[right_side] == LEFT)) {
+        if (!(in_order[left_side] == LEFT && in_order[right_side] == FRONT) && 
+                (in_order[left_side] >= in_order[right_side] || 
+                 (in_order[left_side] == FRONT && in_order[right_side] == LEFT))) {
             std::swap(left_side, right_side);
         }
 
         corner res;
-        
+
         for (int i = 0; i < 3; i++) {
+            int idx;
             if (i == x_side) {
                 auto& idx_map = in_order[i] == TOP ? top_indexes : bottom_indexes;
-                res[i] = miniside{in_order[i], 
-                    _state[in_order[i]][idx_map.at({std::min(in_order[(i + 1) % 3], in_order[(i + 2) % 3]), 
-                                               std::max(in_order[(i + 1) % 3], in_order[(i + 2) % 3])})]};
+                idx = idx_map.at({std::min(in_order[(i + 1) % 3], in_order[(i + 2) % 3]),
+                                               std::max(in_order[(i + 1) % 3], in_order[(i + 2) % 3])});
+                res[i] = miniside{in_order[i],
+                    _state[in_order[i]][idx]};
             }
             else if (i == left_side) {
-                res[i] = miniside{in_order[i], _state[in_order[i]][in_order[x_side] == TOP ? 2 : 8]};
+                idx = in_order[x_side] == TOP ? 2 : 8;
+                res[i] = miniside{in_order[i], _state[in_order[i]][idx]};
             }
             else if (i == right_side) {
-                res[i] = miniside{in_order[i], _state[in_order[i]][in_order[x_side] == TOP ? 0 : 6]};
+                idx = in_order[x_side] == TOP ? 0 : 6;
+                res[i] = miniside{in_order[i], _state[in_order[i]][idx]};
             }
             else {
                 throw std::logic_error("Some of the indexes were not initialized");
             }
         }
-
         return res;
     }
 
@@ -678,91 +678,109 @@ namespace rubik {
 
     rubik_cube& rubik_cube::F() {
         rotate_side(FRONT, rotate_clockwise_map);
+        call_listeners("F");
         return *this;
     }
 
     rubik_cube& rubik_cube::R() {
         rotate_side(RIGHT, rotate_clockwise_map);
+        call_listeners("R");
         return *this;
     }
 
     rubik_cube& rubik_cube::U() {
         rotate_side(TOP, rotate_clockwise_map);
+        call_listeners("U");
         return *this;
     }
 
     rubik_cube& rubik_cube::L() {
         rotate_side(LEFT, rotate_clockwise_map);
+        call_listeners("L");
         return *this;
     }
 
     rubik_cube& rubik_cube::B() {
         rotate_side(BACK, rotate_clockwise_map);
+        call_listeners("B");
         return *this;
     }
 
     rubik_cube& rubik_cube::D() {
         rotate_side(BOTTOM, rotate_clockwise_map);
+        call_listeners("D");
         return *this;
     }
 
     rubik_cube& rubik_cube::F2() {
         rotate_side(FRONT, rotate_twice_map);
+        call_listeners("F2");
         return *this;
     }
 
     rubik_cube& rubik_cube::R2() {
         rotate_side(RIGHT, rotate_twice_map);
+        call_listeners("R2");
         return *this;
     }
 
     rubik_cube& rubik_cube::U2() {
         rotate_side(TOP, rotate_twice_map);
+        call_listeners("U2");
         return *this;
     }
 
     rubik_cube& rubik_cube::L2() {
         rotate_side(LEFT, rotate_twice_map);
+        call_listeners("L2");
         return *this;
     }
 
     rubik_cube& rubik_cube::B2() {
         rotate_side(BACK, rotate_twice_map);
+        call_listeners("B2");
         return *this;
     }
 
     rubik_cube& rubik_cube::D2() {
         rotate_side(BOTTOM, rotate_twice_map);
+        call_listeners("D2");
         return *this;
     }
 
     rubik_cube& rubik_cube::Fi() {
         rotate_side(FRONT, rotate_counterclockwise_map);
+        call_listeners("F'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Ri() {
         rotate_side(RIGHT, rotate_counterclockwise_map);
+        call_listeners("R'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Ui() {
         rotate_side(TOP, rotate_counterclockwise_map);
+        call_listeners("U'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Li() {
         rotate_side(LEFT, rotate_counterclockwise_map);
+        call_listeners("L'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Bi() {
         rotate_side(BACK, rotate_counterclockwise_map);
+        call_listeners("B'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Di() {
         rotate_side(BOTTOM, rotate_counterclockwise_map);
+        call_listeners("D'");
         return *this;
     }
 
@@ -793,11 +811,13 @@ namespace rubik {
             _state[BACK][i] = copy_back[rotate_twice_map[i]];
             _state[BOTTOM][i] = copy_bottom[rotate_twice_map[i]];
         }
+        call_listeners("X");
         return *this;
     }
 
     rubik_cube& rubik_cube::Y() {
         rotate_axis({FRONT, LEFT, BACK, RIGHT, TOP, BOTTOM});
+        call_listeners("Y");
         return *this;
     }
 
@@ -809,6 +829,7 @@ namespace rubik {
                 _state[side][i] = copy[rotate_clockwise_map[i]];
             }
         }
+        call_listeners("Z");
         return *this;
     }
 
@@ -820,11 +841,13 @@ namespace rubik {
             _state[BACK][i] = copy_back[rotate_twice_map[i]];
             _state[TOP][i] = copy_top[rotate_twice_map[i]];
         }
+        call_listeners("X'");
         return *this;
     }
 
     rubik_cube& rubik_cube::Yi() {
         rotate_axis({FRONT, RIGHT, BACK, LEFT, BOTTOM, TOP});
+        call_listeners("Y'");
         return *this;
     }
 
@@ -836,8 +859,22 @@ namespace rubik {
                 _state[side][i] = copy[rotate_counterclockwise_map[i]];
             }
         }
+        call_listeners("Z'");
         return *this;
     }
+
+    rubik_cube& rubik_cube::X2() {
+        return X().X();
+    }
+
+    rubik_cube& rubik_cube::Y2() {
+        return Y().Y();
+    }
+
+    rubik_cube& rubik_cube::Z2() {
+        return Z().Z();
+    }
+
 
     rubik_cube& rubik_cube::M() {
         return Li().R().Xi();
@@ -876,7 +913,14 @@ namespace rubik {
     }
 
     std::string old_pochmann(rubik_cube& cube) {
+
+        std::string moves;
         
+        auto callback_id = cube.add_listener([&moves](std::string_view move) { 
+                moves.append(move); 
+                moves.push_back(' ');
+        });
+
         auto color_sides = cube.get_centers();
 
         /*
@@ -896,7 +940,7 @@ namespace rubik {
          *       | X W W |
         */
 
-        
+
 
         const std::map<std::array<colors, 2>, char> edge_letters = {
             {{cube.get_center(TOP),     cube.get_center(BACK)},     'A'},
@@ -951,6 +995,91 @@ namespace rubik {
             {'W', cube.get_edge(BOTTOM, BACK)},
             {'X', cube.get_edge(BOTTOM, LEFT)},
         };
+
+        struct setup_move {
+            std::function<void()> do_;
+            std::function<void()> undo;
+        };
+
+        const std::map<char, setup_move> setup_moves_for_edges = {
+            {'A',
+                setup_move{[&cube]() { cube.R2().Ui().R2(); },
+                           [&cube]() { cube.R2().U().R2();  }}},
+            {'B',
+                setup_move{[](){ /* buffer */}, 
+                           [](){ /* buffer */}}},
+            {'C',
+                setup_move{[&cube]() { cube.R2().U().R2(); },
+                           [&cube]() { cube.R2().Ui().R2(); }}},
+            {'D',
+                setup_move{[]() { /* move for D */ },
+                           []() { /* undo for D */ }}},
+            {'E',
+                setup_move{[&cube]() { cube.L().Ui().Y().L(); },
+                           [&cube]() { cube.Li().Yi().U().Li(); }}},
+            {'F',
+                setup_move{[&cube]() { cube.Ui().Y().L(); },
+                           [&cube]() { cube.Li().Yi().U(); }}},
+            {'G',
+                setup_move{[&cube]() { cube.Li().Ui().Y().L(); },
+                           [&cube]() { cube.Li().Yi().U().L(); }}},
+            {'H',
+                setup_move{[&cube]() { cube.U().Yi().Li(); },
+                           [&cube]() { cube.L().Y().Ui(); }}},
+            {'I',
+                setup_move{[&cube]() { cube.R().Xi().Di().L2(); },
+                           [&cube]() { cube.L2().D().X().Ri(); }}},
+            {'J',
+                setup_move{[&cube]() { cube.U2().Y2().L(); },
+                           [&cube]() { cube.Li().Y2().U2(); }}},
+            {'K',
+                setup_move{[&cube]() { cube.R().Xi().D().L2(); },
+                           [&cube]() { cube.L2().Di().X().Ri(); }}},
+            {'L',
+                setup_move{[&cube]() { cube.Li(); },
+                           [&cube]() { cube.L(); }}},
+            {'M',
+                setup_move{[]() { /* buffer */ },
+                           []() { /* buffer */ }}},
+            {'N',
+                setup_move{[&cube]() { cube.U().Yi().L(); },
+                           [&cube]() { cube.Li().Y().Ui(); }}},
+            {'O',
+                setup_move{[&cube]() { cube.Di().R().Xi().D().L2(); },
+                           [&cube]() { cube.L2().Di().X().Ri().D(); }}},
+            {'P',
+                setup_move{[&cube]() { cube.Ui().Y().Li(); },
+                           [&cube]() { cube.L().Yi().U(); }}},
+            {'Q',
+                setup_move{[&cube]() { cube.Ri().X().D().L2(); },
+                           [&cube]() { cube.L2().Di().Xi().R();}}},
+            {'R',
+                setup_move{[&cube]() { cube.L(); },
+                           [&cube]() { cube.Li(); }}},
+            {'S',
+                setup_move{[&cube]() { cube.Ri().X().Di().L2(); },
+                           [&cube]() { cube.L2().D().Xi().R(); }}},
+            {'T',
+                setup_move{[&cube]() { cube.U2().Y2().Li(); },
+                           [&cube]() { cube.L().Y2().U2(); }}},
+            {'U',
+                setup_move{[&cube]() { cube.Di().L2(); },
+                           [&cube]() { cube.L2().D(); }}},
+            {'V',
+                setup_move{[&cube]() { cube.D2().L2(); },
+                           [&cube]() { cube.L2().D2(); }}},
+            {'W',
+                setup_move{[&cube]() { cube.D().L2(); },
+                           [&cube]() { cube.L2().Di(); }}},
+            {'X',
+                setup_move{[&cube]() { cube.L2(); },
+                           [&cube]() { cube.L2(); }}},
+        };
+
+        auto swap_edge = [&cube]() {
+            cube.R().U().Ri().Ui().Ri().F().R2().Ui().Ri().Ui().R().U().Ri().Fi();
+        };
+
         std::string edges_mem;
 
         // When order does not matter
@@ -963,14 +1092,14 @@ namespace rubik {
         auto ordered_edge_colors = [](rubik_cube::edge e) -> std::array<colors, 2> {
             return {e[0].color, e[1].color};
         };
-        
+
         // Buffer is UR edge
         auto is_buffer = [&cube](std::array<colors, 2> c) {
             return std::find(c.begin(),
-                             c.end(), 
-                             cube.get_center(TOP)) != c.end() && 
+                             c.end(),
+                             cube.get_center(TOP)) != c.end() &&
                    std::find(c.begin(),
-                             c.end(), 
+                             c.end(),
                              cube.get_center(RIGHT)) != c.end();
         };
 
@@ -983,7 +1112,7 @@ namespace rubik {
         rubik_cube::edge first(current);
         std::map<std::array<colors, 2>, bool> solved_edges;
         for (auto edge : cube.get_edges()) {
-            solved_edges.insert({sorted_edge_colors(edge), 
+            solved_edges.insert({sorted_edge_colors(edge),
                     edge[0].color == cube.get_center(edge[0].side) &&
                     edge[1].color == cube.get_center(edge[1].side)
                 });
@@ -999,14 +1128,22 @@ namespace rubik {
                         break;
                 }
                 edges_mem.push_back(letter);
+                auto moves = setup_moves_for_edges.at(letter);
+                moves.do_();
+                swap_edge();
+                moves.undo();
                 edges_solved++;
                 current = letters_to_edge.at(letter);
-    
+
             } while (!is_same_edges(current, first));
 
             if (!is_buffer(sorted_edge_colors(current))) {
                 auto letter = edge_letters.at(ordered_edge_colors(current));
                 edges_mem.push_back(letter);
+                auto moves = setup_moves_for_edges.at(letter);
+                moves.do_();
+                swap_edge();
+                moves.undo();
                 edges_solved++;
             }
 
@@ -1019,10 +1156,10 @@ namespace rubik {
                 }
             }
 
-        } while (std::any_of(solved_edges.begin(), 
-                             solved_edges.end(), 
+        } while (std::any_of(solved_edges.begin(),
+                             solved_edges.end(),
                              [](auto kv) { return !std::get<1>(kv); }));
-    
+
 
         std::cout << edges_mem << '\n';
 
@@ -1030,7 +1167,7 @@ namespace rubik {
         if (edges_solved % 2 != 0) {
             cube.R().Ui().Ri().Ui().R().U().R().D().Ri().Ui().R().Di().Ri().U2().Ri().Ui();
         }
-        
+
         // Corners
 
         const std::map<std::array<colors, 3>, char> corner_letters = {
@@ -1086,7 +1223,86 @@ namespace rubik {
             {'W', cube.get_corner(BOTTOM, RIGHT, BACK)},
             {'X', cube.get_corner(BOTTOM, BACK, LEFT)},
         };
-        
+
+        const std::map<char, setup_move> setup_moves_for_corners = {
+            {'A',
+                setup_move{[]() { /* buffer */ },
+                           []() { /* buffer */  }}},
+            {'B',
+                setup_move{[&cube](){ cube.R2(); }, 
+                           [&cube](){ cube.R2(); }}},
+            {'C',
+                setup_move{[&cube]() { cube.F2().D(); },
+                           [&cube]() { cube.Di().F2(); }}},
+            {'D',
+                setup_move{[&cube]() { cube.F2(); },
+                           [&cube]() { cube.F2(); }}},
+            {'E',
+                setup_move{[]() { /* buffer */ },
+                           []() { /* buffer */ }}},
+            {'F',
+                setup_move{[&cube]() { cube.Fi().D(); },
+                           [&cube]() { cube.Di().F(); }}},
+            {'G',
+                setup_move{[&cube]() { cube.Fi(); },
+                           [&cube]() { cube.F(); }}},
+            {'H',
+                setup_move{[&cube]() { cube.Di().R(); },
+                           [&cube]() { cube.Ri().D(); }}},
+            {'I',
+                setup_move{[&cube]() { cube.F().Ri(); },
+                           [&cube]() { cube.R().Fi(); }}},
+            {'J',
+                setup_move{[&cube]() { cube.Ri(); },
+                           [&cube]() { cube.R(); }}},
+            {'K',
+                setup_move{[&cube]() { cube.Fi().Ri(); },
+                           [&cube]() { cube.R().F(); }}},
+            {'L',
+                setup_move{[&cube]() { cube.F2().Ri(); },
+                           [&cube]() { cube.R().F2(); }}},
+            {'M',
+                setup_move{[&cube]() { cube.F(); },
+                           [&cube]() { cube.Fi(); }}},
+            {'N',
+                setup_move{[&cube]() { cube.Ri().F(); },
+                           [&cube]() { cube.Fi().R(); }}},
+            {'O',
+                setup_move{[&cube]() { cube.R2().F(); },
+                           [&cube]() { cube.Fi().R2(); }}},
+            {'P',
+                setup_move{[&cube]() { cube.R().F(); },
+                           [&cube]() { cube.Fi().Ri(); }}},
+            {'Q',
+                setup_move{[&cube]() { cube.R().Di(); },
+                           [&cube]() { cube.D().Ri();}}},
+            {'R',
+                setup_move{[]() { /* buffer */ },
+                           []() { /* buffer */ }}},
+            {'S',
+                setup_move{[&cube]() { cube.D().Fi(); },
+                           [&cube]() { cube.F().Di(); }}},
+            {'T',
+                setup_move{[&cube]() { cube.R(); },
+                           [&cube]() { cube.Ri(); }}},
+            {'U',
+                setup_move{[&cube]() { cube.D(); },
+                           [&cube]() { cube.Di(); }}},
+            {'V',
+                setup_move{[]() { },
+                           []() { }}},
+            {'W',
+                setup_move{[&cube]() { cube.Di(); },
+                           [&cube]() { cube.D(); }}},
+            {'X',
+                setup_move{[&cube]() { cube.D2(); },
+                           [&cube]() { cube.D2(); }}},
+        };
+
+        auto swap_corner = [&cube]() {
+            cube.R().Ui().Ri().Ui().R().U().Ri().Fi().R().U().Ri().Ui().Ri().F().R();
+        };
+
         // When order does not matter
         auto sorted_corner_colors = [](rubik_cube::corner c) -> std::array<colors, 3> {
             std::array<colors, 3> res = {c[0].color, c[1].color, c[2].color};
@@ -1102,13 +1318,13 @@ namespace rubik {
         // LBU corner is the buffer
         auto is_corner_buffer = [&cube](std::array<colors, 3> c) {
             return std::find(c.begin(),
-                             c.end(), 
-                             cube.get_center(TOP)) != c.end() && 
+                             c.end(),
+                             cube.get_center(TOP)) != c.end() &&
                    std::find(c.begin(),
-                             c.end(), 
+                             c.end(),
                              cube.get_center(LEFT)) != c.end() &&
                    std::find(c.begin(),
-                             c.end(), 
+                             c.end(),
                              cube.get_center(BACK)) != c.end();
         };
 
@@ -1122,7 +1338,7 @@ namespace rubik {
         rubik_cube::corner first_corner(current_corner);
         std::map<std::array<colors, 3>, bool> solved_corners;
         for (auto corner : cube.get_corners()) {
-            solved_corners.insert({sorted_corner_colors(corner), 
+            solved_corners.insert({sorted_corner_colors(corner),
                     corner[0].color == cube.get_center(corner[0].side) &&
                     corner[1].color == cube.get_center(corner[1].side) &&
                     corner[2].color == cube.get_center(corner[2].side)
@@ -1145,8 +1361,12 @@ namespace rubik {
                         break;
                 }
                 corners_mem.push_back(letter);
+                auto moves = setup_moves_for_corners.at(letter);
+                moves.do_();
+                swap_corner();
+                moves.undo();
                 current_corner = letters_to_corner.at(letter);
-    
+
             } while (!is_same_corners(current_corner, first_corner));
 
             if (!is_corner_buffer(sorted_corner_colors(current_corner))) {
@@ -1158,6 +1378,10 @@ namespace rubik {
                     letter = corner_letters.at({current_corner[0].color, current_corner[2].color, current_corner[1].color});
                 }
                 corners_mem.push_back(letter);
+                auto moves = setup_moves_for_corners.at(letter);
+                moves.do_();
+                swap_corner();
+                moves.undo();
             }
 
             // Find next cycle, if exists
@@ -1169,14 +1393,43 @@ namespace rubik {
                 }
             }
 
-        } while (std::any_of(solved_corners.begin(), 
-                             solved_corners.end(), 
+        } while (std::any_of(solved_corners.begin(),
+                             solved_corners.end(),
                              [](auto kv) { return !std::get<1>(kv); }));
 
         std::cout << corners_mem << "\n";
 
-        std::string moves;
+        cube.remove_listener(callback_id);
 
+        // Shortening
+        std::cout << "\"" << moves << "\"\n";
+
+        using namespace std::string_view_literals;
+        auto letters = "FRULBDXYZMES"sv;
+
+        std::array<std::array<std::string_view, 2>, 7> patterns = {{
+            {"A\\s+A\\s+", "A2 "},
+            {"A'\\s+A'\\s+", "A2 "},
+            {"A\\s+A2\\s+", "A' "},
+            {"A2\\s+A\\s+", "A' "},
+            {"A\\s+A'\\s+", ""},
+            {"A'\\s+A\\s+", ""},
+            {"A2\\s+A2\\s+", ""},
+        }};
+        for (char l : letters) {
+            for (auto [replace, with] : patterns) {
+                std::string pattern(replace);
+                std::replace(pattern.begin(), pattern.end(), 'A', l);
+                std::string to(with);
+                std::replace(to.begin(), to.end(), 'A', l);
+                std::cout << "pattern = " << pattern << ", to = " << to << '\n';
+                std::regex expr(pattern);
+                moves = std::regex_replace(moves, expr, to, std::regex_constants::format_default);
+                std::cout << "\"" << moves << "\"\n";
+            }
+        }
+
+        moves.pop_back();
         return moves;
     }
 

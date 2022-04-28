@@ -1,12 +1,14 @@
 #ifndef RUBIK_HPP
 #define RUBIK_HPP
 
+#include <functional>
 #include <string>
 #include <istream>
 #include <map>
 #include <span>
 #include <ostream>
 #include <array>
+#include <vector>
 
 
 namespace rubik {
@@ -57,6 +59,9 @@ namespace rubik {
 
             void rotate_side(sides, const std::array<int, 9>&);
             void rotate_axis(const std::array<sides, 6>&);
+
+            std::map<std::size_t, std::function<void(std::string_view)>> _listeners;
+            void call_listeners(std::string_view);
 
         public:
             struct miniside {
@@ -114,6 +119,11 @@ namespace rubik {
             rubik_cube& Yi();
             rubik_cube& Zi();
 
+
+            rubik_cube& X2();
+            rubik_cube& Y2();
+            rubik_cube& Z2();
+
             rubik_cube& M();
             rubik_cube& E();
             rubik_cube& S();
@@ -125,6 +135,12 @@ namespace rubik {
             rubik_cube& M2();
             rubik_cube& E2();
             rubik_cube& S2();
+
+            // Subscribing to a rotation event
+            [[nodiscard("Returns an ID of a listener which then can be used to delete it")]] 
+            std::size_t add_listener(std::function<void(std::string_view)>);
+            void remove_listener(std::size_t);
+            
     };
 
     std::string old_pochmann(rubik_cube& cube);
@@ -162,4 +178,5 @@ namespace rubik {
     };
 }
 std::ostream& operator<<(std::ostream&, rubik::sides);
+std::ostream& operator<<(std::ostream& os, rubik::colors color);
 #endif
