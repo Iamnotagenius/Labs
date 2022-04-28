@@ -1,6 +1,10 @@
 #include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <random>
+#include <cli/cli.h>
+#include <cli/loopscheduler.h>
+#include <cli/clilocalsession.h>
 
 #include "rubik.hpp"
 
@@ -33,41 +37,47 @@ std::ostream& operator<<(std::ostream& os, const std::map<K, V>& rhs) {
 }
 
 int main() {
-    rubik_cube simple_swap;
-    rubik_cube cycles;
-    rubik_cube flipped;
-    rubik_cube corner_swap;
-    rubik_cube real_example;
+    rubik_cube cube;
+    auto printer = std::make_unique<color_printer>(cube);
+    auto menu = std::make_unique<cli::Menu>("rubix");
+    menu->Insert(
+        "read",
+        [&cube](std::ostream& os, const std::string& filename) {
+            std::ifstream file(filename);
+            try {
+                rubik_cube tmp(file);
+                cube = tmp;
+            } catch (std::invalid_argument e) {
+                cout << e.what() << '\n';
+            }
+        },
+        "Read scramble from a file"
+    );
 
-    
-    simple_swap.R().U().Ri().Ui().L().Ri().F().R().Fi().Li();
-    cycles.L2().R2().D().L2().R2().U2().L2().R2().D().L2().R2();
-    flipped.Mi().U().Mi().U().Mi().U2().M().U().M().U().M().U2();
-    corner_swap.L2().F2().L().B().Li().F2().L().Bi().L();
-    real_example.Ui().L2().Di().U().R2().Bi().Di().Ui().L2().B2().Ri().    
-        Ui().Bi().Fi().L().U2().F().R2().Ui();
-    //real_example.U().R().Ri().D().Ui();
+    std::initializer_list<std::pair<std::string_view, std::function<void(rubik_cube&)>>> moves = {
+        {"F", &rubik_cube::F},
+        {"R", &rubik_cube::R},
+        {"U", &rubik_cube::U},
+        {"B", &rubik_cube::B},
+        {"L", &rubik_cube::L},
+        {"D", &rubik_cube::D}
+    };
+    for (auto pair : moves) {
+        menu->Insert(
+            std::string(pair.first),
+            [&](std::ostream& os) {
+                std::get<1>(pair)(cube);
+                os << *printer;
+            },
+            std::string(pair.first) + " turn"
+        );
+    }
 
-    //cout << "Simple swap:\n" << color_printer(simple_swap);
-    //old_pochmann(simple_swap);
-    //cout << "Solved:\n" << color_printer(simple_swap) << "\n";
-    //
-    //cout << "New cycles:\n" << color_printer(cycles);
-    //old_pochmann(cycles);
-    //cout << "Solved:\n" << color_printer(cycles);
-    //
-    //cout << "Flipped:\n" << color_printer(flipped);
-    //old_pochmann(flipped);
-    //cout << "Solved:\n" << color_printer(flipped) << "\n";
-    //
-    //cout << "Corner swap:\n" << color_printer(corner_swap);
-    //old_pochmann(corner_swap);
-    //cout << "Solved:\n" << color_printer(corner_swap) << "\n";
-    //
-    cout << "Real Example:\n" << color_printer(real_example);
-    auto solution = old_pochmann(real_example);
-    cout << "Solved:\n" << color_printer(real_example) << '\n'
-         << "Solution: " << solution << '\n';
-    
+    cli::LoopScheduler loop;
+
+    cli::Cli cli(std::move(menu));
+
+    cli::CliLocalTerminalSession session(cli, loop, std::cout);
+    loop.Run();
     return 0;
 }
