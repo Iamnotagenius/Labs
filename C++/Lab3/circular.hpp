@@ -364,6 +364,7 @@ namespace custom_data_structures {
             void prepare_to_push_back() {
                 if (_size == _capacity) {
                     alloc_traits::destroy(_alloc, _data + _end);
+                    ++_start;
                 }
                 if (_size < _capacity) {
                     ++_size;
