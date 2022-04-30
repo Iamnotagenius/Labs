@@ -143,6 +143,8 @@ namespace rubik {
             
     };
 
+    void write_cube(std::ostream& os, const rubik_cube& cube, const std::map<colors, char> map);
+
     std::string old_pochmann(rubik_cube& cube);
 
     class cube_printer {
@@ -155,7 +157,6 @@ namespace rubik {
             virtual void print_row(std::ostream&, std::span<const colors, 3>) const = 0;
             virtual void print_blank_row(std::ostream&) const = 0;
             friend std::ostream& operator<<(std::ostream&, const cube_printer&);
-            
     };
     class color_printer : public cube_printer {
         private:

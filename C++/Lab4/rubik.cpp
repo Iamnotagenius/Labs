@@ -380,11 +380,14 @@ namespace rubik {
     }
 
     rubik_cube::rubik_cube(std::istream& stream, const std::map<char, colors>& color_map) {
-
         for (auto& side : _state) {
             for (auto& pos : side) {
                 char sym;
                 stream >> sym;
+                if (!stream || stream.eof()) {
+                    throw std::runtime_error(stream.eof() ? "Unexpected EOF" : 
+                                                            "Failed to read scramble from stream");
+                }
                 pos = color_map.at(sym);
             }
         }
@@ -912,6 +915,14 @@ namespace rubik {
         return S().S();
     }
 
+    void write_cube(std::ostream& os, const rubik_cube& cube, const std::map<colors, char> char_map) {
+        for (auto side : cube.get_state()) {
+            for (auto pos : side) {
+                os << char_map.at(pos);
+            }
+        }
+    }
+
     std::string old_pochmann(rubik_cube& cube) {
 
         std::string moves;
@@ -1161,8 +1172,6 @@ namespace rubik {
                              [](auto kv) { return !std::get<1>(kv); }));
 
 
-        std::cout << edges_mem << '\n';
-
         // Parity algorithm
         if (edges_solved % 2 != 0) {
             cube.R().Ui().Ri().Ui().R().U().R().D().Ri().Ui().R().Di().Ri().U2().Ri().Ui();
@@ -1397,12 +1406,9 @@ namespace rubik {
                              solved_corners.end(),
                              [](auto kv) { return !std::get<1>(kv); }));
 
-        std::cout << corners_mem << "\n";
-
         cube.remove_listener(callback_id);
 
         // Shortening
-        std::cout << "\"" << moves << "\"\n";
 
         using namespace std::string_view_literals;
         auto letters = "FRULBDXYZMES"sv;
@@ -1422,10 +1428,8 @@ namespace rubik {
                 std::replace(pattern.begin(), pattern.end(), 'A', l);
                 std::string to(with);
                 std::replace(to.begin(), to.end(), 'A', l);
-                std::cout << "pattern = " << pattern << ", to = " << to << '\n';
                 std::regex expr(pattern);
                 moves = std::regex_replace(moves, expr, to, std::regex_constants::format_default);
-                std::cout << "\"" << moves << "\"\n";
             }
         }
 
