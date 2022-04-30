@@ -165,6 +165,7 @@ namespace rubik {
             color_printer(const rubik_cube&);
             color_printer(const rubik_cube&, std::string_view);
             color_printer(const rubik_cube&, std::string_view, const std::map<colors, std::array<int, 3>>& symbols);
+            color_printer(const rubik_cube&, const std::map<colors, std::array<int, 3>>& symbols);
             void print_row(std::ostream&, std::span<const colors, 3>) const override;
             void print_blank_row(std::ostream&) const override;
     };

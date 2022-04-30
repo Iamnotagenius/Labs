@@ -1511,6 +1511,9 @@ namespace rubik {
         }
     }
 
+    color_printer::color_printer(const rubik_cube& cube, const std::map<colors, std::array<int, 3>>& colors) 
+        : color_printer(cube, " U\nLFRB\n D\n", colors) {}
+
     void color_printer::print_row(std::ostream& os, std::span<const colors, 3> row) const {
         for (auto pos : row) {
             os << "\033[48;2;" << _colors.at(pos)[0] << ';' << _colors.at(pos)[1] << ';' << _colors.at(pos)[2] << "m  ";

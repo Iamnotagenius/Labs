@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <random>
 #include <cli/cli.h>
@@ -47,9 +48,59 @@ std::ostream& operator<<(std::ostream& os, const std::map<K, V>& rhs) {
     return os;
 }
 
-int main() {
+int main(int argc, char **argv) {
+    using namespace std::string_view_literals;
+    bool color = false;
+    if (std::find(argv, argv + argc, "--color"sv) != argv + argc) {
+        cli::SetColor();
+        color = true;
+    } 
+
+    std::map<colors, std::array<int, 3>> color_map = {
+        {RED, {220, 20, 60}},
+        {ORANGE, {255, 140, 0}},
+        {WHITE, {255, 255, 255}},
+        {YELLOW, {251, 236, 93}},
+        {BLUE, {119, 181, 254}},
+        {GREEN, {119, 221, 119}}
+    };
+
+    static const std::map<std::string_view, colors> color_names = {
+        {"red", RED},
+        {"orange", ORANGE},
+        {"white", WHITE},
+        {"yellow", YELLOW},
+        {"blue", BLUE},
+        {"green", GREEN}
+    };
+    
+    for (auto it = argv; it != argc + argv; ++it) {
+        std::string_view option(*it);
+        for (auto [name, color] : color_names) {
+            if (option.starts_with("--" + std::string(name))) {
+                auto prefix = 3 + name.length();
+                if (option.find_first_of('#') == std::string_view::npos) {
+                    std::cerr << "Colors must be given in hex-code\n";
+                    return 1;
+                }
+                
+                std::string hexes;
+                hexes.append(option.substr(prefix + 1, 2));
+                hexes.push_back(' ');
+                hexes.append(option.substr(prefix + 3, 2));
+                hexes.push_back(' ');
+                hexes.append(option.substr(prefix + 5, 2));
+                std::istringstream stream(hexes);
+                
+                int red, green, blue;
+                stream >> std::hex >> red >> green >> blue;
+                color_map[color_names.at(option.substr(2, option.find('=') - 2))] = {red, green, blue};
+            }
+        }
+    }
+    
     rubik_cube cube;
-    auto printer = std::make_unique<color_printer>(cube);
+    auto printer = std::make_unique<color_printer>(cube, color_map);
     auto menu = std::make_unique<cli::Menu>();
     circular_buffer<std::string_view> last_moves(5);
     
@@ -100,6 +151,14 @@ int main() {
             os << *printer;
         },
         "Print out the cube"
+    );
+
+    menu->Insert(
+        "scramble",
+        [&cube](std::ostream& os) {
+            cube = rubik_cube(35);
+        },
+        "Scramble the cube"
     );
 
     auto g = std::bind(&rubik_cube::F, cube);
@@ -157,7 +216,7 @@ int main() {
             [&, pair](std::ostream& os) {
                 pair.second(cube);
                 last_moves.push_back(pair.first);
-                os << *printer << "\033[1;32m" << last_moves;
+                os << *printer << (color ? "\033[1;32m" : "") << last_moves;
 
             },
             std::string(pair.first) + " turn"
@@ -173,8 +232,6 @@ int main() {
     );
 
     cli::LoopScheduler loop;
-
-    cli::SetColor();
 
     cli::Cli cli(std::move(menu));
 
