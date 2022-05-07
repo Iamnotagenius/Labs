@@ -1,6 +1,8 @@
 #include <stdexcept>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <cstdint>
 #include <cstdlib>
 
@@ -8,9 +10,10 @@ namespace memory {
     template<typename T>
     class pool_allocator {
         private:
-            std::shared_ptr<void*> _heap;
+            std::shared_ptr<void> _heap;
             std::shared_ptr<void**> _free_list;
             std::size_t _size_of_piece;
+
         public:
             using pointer = T*;
             using value_type = T;
@@ -19,21 +22,20 @@ namespace memory {
                 using other = pool_allocator<U>;
             };
             pool_allocator(std::size_t size = 16, std::size_t count = 1024) 
-                : _heap(std::make_shared<void*>(std::malloc(size * count))), 
-                  _free_list(std::make_shared<void**>(reinterpret_cast<void**>(*_heap))), 
+                : _heap(std::shared_ptr<void>(std::malloc(size * count), 
+                                               [](void* ptr) { std::free(ptr); std::cerr << "Heap freed.\n"; })), 
+                  _free_list(std::make_shared<void**>(reinterpret_cast<void**>(_heap.get()))), 
                   _size_of_piece(size) {
-                    if (size < sizeof(std::size_t)) {
-                        throw std::invalid_argument("Piece size must be at least pointer size");
-                    }
-                std::cerr << "Heap allocated on " << _heap << '\n';
-                auto end_addr = reinterpret_cast<char*>(*_heap) + size * count;
-                std::cerr << "Blocks:\n";
+                if (size < sizeof(std::uintptr_t)) {
+                    throw std::invalid_argument("Piece size must be at least pointer size");
+                }
+                std::cerr << "Heap allocated on " << _heap.get() << '\n';
+                auto end_addr = reinterpret_cast<char*>(_heap.get()) + size * count;
                 for (std::size_t i = 0; i < count; ++i) {
-                    auto current = reinterpret_cast<char*>(*_heap) + i * size;
+                    auto current = reinterpret_cast<char*>(_heap.get()) + i * size;
                     auto next = current + size;
                     // Store address of next piece in the free memory
                     *reinterpret_cast<void**>(current) = next < end_addr ? next : nullptr;
-                    std::cerr << reinterpret_cast<void*>(next < end_addr ? next : nullptr) << '\n';
                 }
             }
 
@@ -41,7 +43,7 @@ namespace memory {
                 return _heap == rhs._heap;
             }
 
-            const std::shared_ptr<void*>& get_heap() const {
+            const std::shared_ptr<void>& get_heap() const {
                 return _heap;
             }
 
@@ -58,28 +60,35 @@ namespace memory {
                 _heap(other.get_heap()),
                 _free_list(other.get_free_list()),
                 _size_of_piece(other.get_block_size()) {
-                    std::cerr << "free list = " << _free_list << '\n';
                 }
 
 
             [[nodiscard]] T* allocate(std::size_t n) {
-                std::cerr << "Allocation on " << *_free_list << "\n";
-                if (n > _size_of_piece) {
-                    throw std::invalid_argument("Can't allocate more than size of piece");
+
+                if (n * sizeof(T) > _size_of_piece) {
+                    using namespace std::string_literals;
+                    throw std::invalid_argument("Can't allocate more than "s + std::to_string(n) + " elements of size " + std::to_string(sizeof(T)));
                 }
-                if (**_free_list == nullptr) {
+                if (*_free_list == nullptr) {
                     throw std::bad_alloc();
                 }
 
                 auto allocating = reinterpret_cast<T*>(*_free_list);
                 *_free_list = reinterpret_cast<void**>(**_free_list);
-                std::cerr << "Next pointer: " << *_free_list << "\n";
+                
+                auto list = *_free_list;
+                int chunks = 0;
+                while (list) {
+                    list = reinterpret_cast<void**>(*list);
+                    chunks++;
+                }
+                std::cerr << "\033[32mAllocation: \033[33;1m" << chunks << "\033[0m chunks left\n";
+
                 return allocating;
 
             }
 
             void deallocate(T* p, std::size_t) {
-                std::cerr << "Deallocation!\n";
                 if (p == nullptr) {
                     return;
                 }
@@ -87,11 +96,21 @@ namespace memory {
                 if (*_free_list == nullptr) {
                     *_free_list = reinterpret_cast<void**>(p);
                     **_free_list = nullptr;
-                    return;
                 }
-                void** temp = *_free_list;
-                *_free_list = reinterpret_cast<void**>(p);
-                **_free_list = reinterpret_cast<void*>(temp);
+                else {
+                    void** temp = *_free_list;
+                    *_free_list = reinterpret_cast<void**>(p);
+                    **_free_list = reinterpret_cast<void*>(temp);
+                }
+
+                auto list = *_free_list;
+                int chunks = 0;
+                while (list) {
+                    list = reinterpret_cast<void**>(*list);
+                    chunks++;
+                }
+                std::cerr << "\033[31mDeallocation: \033[33;1m" << chunks << "\033[0m chunks left\n";
+
             }
 
     };
