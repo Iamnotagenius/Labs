@@ -28,3 +28,41 @@ struct polynom {
             static constexpr int value = iter<X, 0, Coefs...>::value;
         };
 };
+
+template<int P, int A, int... Coefs>
+void to_str(std::ostream& os, polynom<A, Coefs...>) {
+    os << (A < 0 ? " - " : " + ");
+    if (A != 1 && A != -1) {
+        os << std::abs(A);
+    }
+    os << "x";
+    if (P > 1) {
+        os << "^" << P;
+    }
+    to_str<P + 1, Coefs...>(os, polynom<Coefs...>());
+}
+
+template<int P, int A, int... Coefs>
+void to_str(std::ostream& os, polynom<0, Coefs...>) {
+    to_str<P + 1, Coefs...>(os, polynom<Coefs...>());
+}
+
+template<int P, int A, int... Coefs>
+void to_str(std::ostream& os, polynom<0, A>) {
+    os << (A < 0 ? " - " : " + ");
+    if (A != 1 && A != -1) {
+        os << std::abs(A);
+    }
+    os << "x^" << P;
+}
+
+template<int P>
+void to_str(std::ostream& os, polynom<>) {}
+
+template<int A, int... Coefs>
+std::ostream& operator<<(std::ostream& os, polynom<A, Coefs...> p) {
+    os << (A < 0 ? "-" : "") << A;
+    to_str<1, Coefs...>(os, polynom<Coefs...>());
+    return os;
+}
+
