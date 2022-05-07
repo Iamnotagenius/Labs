@@ -23,13 +23,13 @@ namespace memory {
             };
             pool_allocator(std::size_t size = 16, std::size_t count = 1024) 
                 : _heap(std::shared_ptr<void>(std::malloc(size * count), 
-                                               [](void* ptr) { std::free(ptr); std::cerr << "Heap freed.\n"; })), 
+                                               [](void* ptr) { std::free(ptr); })), 
                   _free_list(std::make_shared<void**>(reinterpret_cast<void**>(_heap.get()))), 
                   _size_of_piece(size) {
                 if (size < sizeof(std::uintptr_t)) {
                     throw std::invalid_argument("Piece size must be at least pointer size");
                 }
-                std::cerr << "Heap allocated on " << _heap.get() << '\n';
+
                 auto end_addr = reinterpret_cast<char*>(_heap.get()) + size * count;
                 for (std::size_t i = 0; i < count; ++i) {
                     auto current = reinterpret_cast<char*>(_heap.get()) + i * size;
@@ -76,6 +76,7 @@ namespace memory {
                 auto allocating = reinterpret_cast<T*>(*_free_list);
                 *_free_list = reinterpret_cast<void**>(**_free_list);
                 
+#ifdef DEBUG
                 auto list = *_free_list;
                 int chunks = 0;
                 while (list) {
@@ -83,6 +84,7 @@ namespace memory {
                     chunks++;
                 }
                 std::cerr << "\033[32mAllocation: \033[33;1m" << chunks << "\033[0m chunks left\n";
+#endif
 
                 return allocating;
 
@@ -102,7 +104,7 @@ namespace memory {
                     *_free_list = reinterpret_cast<void**>(p);
                     **_free_list = reinterpret_cast<void*>(temp);
                 }
-
+#ifdef DEBUG
                 auto list = *_free_list;
                 int chunks = 0;
                 while (list) {
@@ -110,6 +112,7 @@ namespace memory {
                     chunks++;
                 }
                 std::cerr << "\033[31mDeallocation: \033[33;1m" << chunks << "\033[0m chunks left\n";
+#endif
 
             }
 
