@@ -2,11 +2,18 @@
 
 template<int N, int P>
 struct power {
-    static constexpr int value = power<N, P - 1>::value * N;
-};
-template<int N>
-struct power<N, 0> {
-    static constexpr int value = 1;
+    private:
+        template<int Val, int Pow, int Res>
+        struct iter {
+            static constexpr int value = std::conditional_t<Pow & 1, iter<Val * Val, Pow / 2, Res * Val>, 
+                                                                     iter<Val * Val, Pow / 2, Res>>::value;
+        };
+        template<int Val, int Res>
+        struct iter<Val, 0, Res> {
+            static constexpr int value = Res;
+        };
+    public:
+        static constexpr int value = iter<N, P, 1>::value;
 };
 
 template<int... Coefs>
@@ -65,4 +72,3 @@ std::ostream& operator<<(std::ostream& os, polynom<A, Coefs...> p) {
     to_str<1, Coefs...>(os, polynom<Coefs...>());
     return os;
 }
-
