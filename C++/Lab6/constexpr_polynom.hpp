@@ -21,54 +21,64 @@ struct polynom {
     private:
         template<int X, int P, int Coef, int... Rem>
         struct iter {
-            static constexpr int value = power<X, P>::value * Coef + iter<X, P + 1, Rem...>::value;
+            static constexpr int value = power<X, P>::value * Coef + iter<X, Rem...>::value;
         };
+
     
         template<int X, int P, int Coef>
         struct iter<X, P, Coef> {
             static constexpr int value = power<X, P>::value * Coef;
         };
 
+        template<int X, int Coef>
+        struct iter<X, 0, Coef> {
+            static constexpr int value = Coef;
+        };
+        
+
     public:
         template<int X>
         struct eval {
-            static constexpr int value = iter<X, 0, Coefs...>::value;
+            static constexpr int value = iter<X, Coefs...>::value;
         };
 };
 
+template<int... Coefs>
+void to_str(std::ostream&, polynom<Coefs...>);
+
 template<int P, int A, int... Coefs>
-void to_str(std::ostream& os, polynom<A, Coefs...>) {
+void to_str(std::ostream& os, polynom<P, A, Coefs...>) {
     os << (A < 0 ? " - " : " + ");
     if (A != 1 && A != -1) {
         os << std::abs(A);
     }
-    os << "x";
-    if (P > 1) {
-        os << "^" << P;
+    if (P > 0) {
+        os << "x";
+        if (P > 1) {
+            os << "^" << P;
+        }
     }
-    to_str<P + 1, Coefs...>(os, polynom<Coefs...>());
+
+    to_str<Coefs...>(os, polynom<Coefs...>());
 }
+
+template<>
+void to_str<>(std::ostream &os, polynom<>) {}
 
 template<int P, int A, int... Coefs>
-void to_str(std::ostream& os, polynom<0, Coefs...>) {
-    to_str<P + 1, Coefs...>(os, polynom<Coefs...>());
-}
-
-template<int P, int A, int... Coefs>
-void to_str(std::ostream& os, polynom<0, A>) {
-    os << (A < 0 ? " - " : " + ");
-    if (A != 1 && A != -1) {
-        os << std::abs(A);
+std::ostream& operator<<(std::ostream& os, polynom<P, A, Coefs...> p) {
+    if (A < 0) {
+        os << '-';
     }
-    os << "x^" << P;
-}
-
-template<int P>
-void to_str(std::ostream& os, polynom<>) {}
-
-template<int A, int... Coefs>
-std::ostream& operator<<(std::ostream& os, polynom<A, Coefs...> p) {
-    os << (A < 0 ? "-" : "") << A;
-    to_str<1, Coefs...>(os, polynom<Coefs...>());
+    if (std::abs(A) != 1) {
+        os << A;
+    }
+    if (P > 0) {
+        os << 'x';
+        if (P > 1) {
+            os << '^' << P;
+        }
+    }
+    to_str<Coefs...>(os, polynom<Coefs...>());
     return os;
 }
