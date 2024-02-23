@@ -23,10 +23,15 @@ namespace Algebra {
 
 
     int Polynom::operator[] (size_t index) const {            
+        if (index >= _coefs->size()) 
+            return 0;
         return (*_coefs)[index];
     }
 
     int& Polynom::operator[](size_t index) {
+        if (index >= _coefs->size()) {
+            _coefs->resize(index + 1);
+        }
         return (*_coefs)[index];
     }
     
